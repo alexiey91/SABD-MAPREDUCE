@@ -1,12 +1,15 @@
 package query;
 
 import com.google.gson.Gson;
+import designpattern.partitioning.PartitionDataByYear;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Partitioner;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.MultipleInputs;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
@@ -19,9 +22,9 @@ import java.util.Date;
 
 public class Query1 {
 
-    public static abstract class GenericHierarchyMapper extends Mapper<Object, Text, Text, Text> {
+    public static abstract class GenericHierarchyMapper extends Mapper<Object, Text, IntWritable, Text> {
 
-        private Text outKey = new Text();
+        private IntWritable outKey = new IntWritable();
         private Text outValue = new Text();
         private final String valuePrefix;
 
@@ -36,8 +39,8 @@ public class Query1 {
             String line = value.toString();
             String[] parts = line.split(",");
             if(valuePrefix.equals("R")) {
-                if(Double.parseDouble(parts[2])<4.0 ||
-                        new Date(parts[3]).before(new Date(2000,1,1)))
+                //||new Date(parts[3]).before(new Date(2000,1,1))
+                if(Double.parseDouble(parts[2])<4.0 )
                     return;
                 movieId = parts[1];
                 content = parts[2];//rating
@@ -47,14 +50,21 @@ public class Query1 {
                 for(int j = 1;j<=parts.length-1;j++)
                     content.concat(parts[j]);//title
             }
-
-            outKey.set(movieId);
+        //    System.out.println("MAP"+movieId+","+content);
+            outKey.set(Integer.parseInt(movieId));
             outValue.set(valuePrefix + content);
             context.write(outKey, outValue);
 
         }
     }
+    public static class DatePartitioner extends Partitioner<IntWritable, Text> {
 
+        public int getPartition(IntWritable key, Text value, int numPartitions) {
+
+            return (key.get() ) % numPartitions;
+        }
+
+    }
     public static class RatingMapper extends GenericHierarchyMapper {
         public RatingMapper() {
             super("R");
@@ -68,22 +78,22 @@ public class Query1 {
     }
 
     public static class TopicHierarchyReducer extends
-            Reducer<Text, Text, Text, NullWritable> {
+            Reducer<IntWritable, Text, Text, NullWritable> {
 
         public enum ValueType { RATING, FILM , UNKNOWN}
         private Gson gson = new Gson();
 
         @Override
-        public void reduce(Text key, Iterable<Text> values, Context context)
+        public void reduce(IntWritable key, Iterable<Text> values, Context context)
                 throws IOException, InterruptedException {
 
             Films films = new Films();
             for (Text t : values) {
 
                 String value = t.toString();
-                if (ValueType.RATING.equals(discriminate(value))){
+                if (ValueType.FILM.equals(discriminate(value))){
                     films.setTitle(getContent(value));
-                } else if (ValueType.FILM.equals(discriminate(value))){
+                } else if (ValueType.RATING.equals(discriminate(value))){
                     films.addRating(Double.parseDouble(getContent(value)));
                 }
 
@@ -127,11 +137,15 @@ public class Query1 {
          * arg[1] film*/
         MultipleInputs.addInputPath(job, new Path(args[0]), TextInputFormat.class, RatingMapper.class);
         MultipleInputs.addInputPath(job, new Path(args[1]), TextInputFormat.class, FilmMapper.class);
-
+        job.setMapOutputKeyClass(IntWritable.class);
         /* Reduce function */
         job.setReducerClass(TopicHierarchyReducer.class);
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(Text.class);
+        job.setNumReduceTasks(30);
+
+
+        job.setPartitionerClass(Query1.DatePartitioner.class);
 
         /* Set output files/directories using command line arguments */
         FileOutputFormat.setOutputPath(job, new Path(args[2]));
