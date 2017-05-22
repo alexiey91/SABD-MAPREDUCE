@@ -1,0 +1,5 @@
+hello world goodby
+hello matteo
+hello john
+hello mike
+hello mapreduce
