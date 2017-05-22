@@ -35,22 +35,23 @@ public class Query1 {
         @Override
         public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
             String movieId;
-            String content="";
+            String content= new String();
             String line = value.toString();
             String[] parts = line.split(",");
             if(valuePrefix.equals("R")) {
                 //||new Date(parts[3]).before(new Date(2000,1,1))
-                if(Double.parseDouble(parts[2])<4.0 )
+                if(Double.parseDouble(parts[2])< 4.0 )
                     return;
                 movieId = parts[1];
                 content = parts[2];//rating
 
+
             }else{
                 movieId = parts[0];
                 for(int j = 1;j<=parts.length-1;j++)
-                    content.concat(parts[j]);//title
+                    content += parts[j];//title
+                //outValue.set(valuePrefix + content.substring(0,content.lastIndexOf(')')));
             }
-        //    System.out.println("MAP"+movieId+","+content);
             outKey.set(Integer.parseInt(movieId));
             outValue.set(valuePrefix + content);
             context.write(outKey, outValue);
@@ -78,7 +79,8 @@ public class Query1 {
     }
 
     public static class TopicHierarchyReducer extends
-            Reducer<IntWritable, Text, Text, NullWritable> {
+            //Reducer<IntWritable, Text, Text, NullWritable> {
+            Reducer<IntWritable, Text, Text, Text> {
 
         public enum ValueType { RATING, FILM , UNKNOWN}
         private Gson gson = new Gson();
@@ -92,7 +94,7 @@ public class Query1 {
 
                 String value = t.toString();
                 if (ValueType.FILM.equals(discriminate(value))){
-                    films.setTitle(getContent(value));
+                    films.setTitle(key+":"+getContent(value));
                 } else if (ValueType.RATING.equals(discriminate(value))){
                     films.addRating(Double.parseDouble(getContent(value)));
                 }
@@ -101,7 +103,10 @@ public class Query1 {
 
             /* Serialize topic */
             String serializedTopic = gson.toJson(films);
-            context.write(new Text(serializedTopic), NullWritable.get());
+            //System.out.println("FILMS-reducer"+serializedTopic+"Title"+films.getTitle());
+            if(films.getRatingNumber() > (Double) 0.0)
+                context.write(new Text(films.getTitle()), new Text(films.getRating().toString()));
+                //context.write(new Text(serializedTopic), NullWritable.get());
 
         }
 
