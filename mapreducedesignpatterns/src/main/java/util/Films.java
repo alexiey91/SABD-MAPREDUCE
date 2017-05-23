@@ -5,9 +5,14 @@ package util;
  * Created by root on 22/05/17.
  */
 public class Films {
-    private String title;
-    private Double ratingNumber;
-    private Double ratingAvg;
+    String title;
+    Double ratingNumber;
+    Double ratingAvg;
+
+    public Films() {
+        this.ratingNumber = 0.0;
+        this.ratingAvg = 0.0;
+    }
 
     public String getTitle() {
         return title;

@@ -18,6 +18,7 @@ import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import util.Films;
 
 import java.io.IOException;
+import java.util.Calendar;
 import java.util.Date;
 
 public class Query1 {
@@ -38,9 +39,15 @@ public class Query1 {
             String content= new String();
             String line = value.toString();
             String[] parts = line.split(",");
+
             if(valuePrefix.equals("R")) {
-                //||new Date(parts[3]).before(new Date(2000,1,1))
-                if(Double.parseDouble(parts[2])< 4.0 )
+                Calendar temp = Calendar.getInstance();
+                temp.set(2000,Calendar.JANUARY,1);
+                Calendar temp1 = Calendar.getInstance();
+                temp1.setTimeInMillis(Long.parseLong(parts[3])*1000);
+                /*if(temp1.getTime().compareTo(temp.getTime())<0)
+                    System.out.println("VECCHIO RATING"+temp1.getTime());*/
+                if(Double.parseDouble(parts[2])< 4.0 || temp1.getTime().compareTo(temp.getTime())<0)
                     return;
                 movieId = parts[1];
                 content = parts[2];//rating
@@ -48,9 +55,8 @@ public class Query1 {
 
             }else{
                 movieId = parts[0];
-                for(int j = 1;j<=parts.length-1;j++)
+                for(int j = 1;j<parts.length-1;j++)
                     content += parts[j];//title
-                //outValue.set(valuePrefix + content.substring(0,content.lastIndexOf(')')));
             }
             outKey.set(Integer.parseInt(movieId));
             outValue.set(valuePrefix + content);

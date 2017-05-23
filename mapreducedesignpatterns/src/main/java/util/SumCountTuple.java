@@ -66,9 +66,7 @@ public class SumCountTuple implements Writable {
         SumCountTuple other = (SumCountTuple) obj;
         if (Float.floatToIntBits(sum) != Float.floatToIntBits(other.sum))
             return false;
-        if (Float.floatToIntBits(count) != Float.floatToIntBits(other.count))
-            return false;
-        return true;
+        return Float.floatToIntBits(count) == Float.floatToIntBits(other.count);
     }
 
 }
