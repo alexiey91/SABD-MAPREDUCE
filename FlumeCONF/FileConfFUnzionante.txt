@@ -1,0 +1,46 @@
+# Initialize agent's source, channel and sink
+agent.sources = TwitterExampleDir
+agent.channels = memoryChannel
+agent.sinks = flumeHDFS
+
+# Setting the source to spool directory where the file exists
+agent.sources.TwitterExampleDir.type = spooldir
+agent.sources.TwitterExampleDir.spoolDir = /usr/local/hadoop/Flume/SpoolDir
+
+# Setting the channel to memory
+agent.channels.memoryChannel.type = memory
+# Max number of events stored in the memory channel
+agent.channels.memoryChannel.capacity = 100000
+# agent.channels.memoryChannel.batchSize = 15000
+agent.channels.memoryChannel.transactioncapacity = 1000
+
+# Setting the sink to HDFS
+agent.sinks.flumeHDFS.type = hdfs
+agent.sinks.flumeHDFS.hdfs.path = hdfs://master:54310/Testing1
+agent.sinks.flumeHDFS.hdfs.fileType = DataStream
+agent.sinks.flumeHDFS.hdfs.batchSize = 1000
+agent-sinks.flumeHDFS.hdfs.txnEventMax = 1000
+agent-sinks.flumeHDFS.hdfs.threadsPoolSize = 10
+
+# Write format can be text or writable
+agent.sinks.flumeHDFS.hdfs.writeFormat = Text
+
+# use a single csv file at a time
+agent.sinks.flumeHDFS.hdfs.maxOpenFiles = 1
+
+# rollover file based on maximum size of 10 MB
+agent.sinks.flumeHDFS.hdfs.rollCount=0
+agent.sinks.flumeHDFS.hdfs.rollInterval=2000
+agent.sinks.flumeHDFS.hdfs.rollSize = 0
+agent.sinks.flumeHDFS.hdfs.batchSize =1000
+
+# never rollover based on the number of events
+agent.sinks.flumeHDFS.hdfs.rollCount = 0
+
+# rollover file based on max time of 1 min
+#agent.sinks.flumeHDFS.hdfs.rollInterval = 0
+# agent.sinks.flumeHDFS.hdfs.idleTimeout = 600
+
+# Connect source and sink with channel
+agent.sources.TwitterExampleDir.channels = memoryChannel
+agent.sinks.flumeHDFS.channel = memoryChannel

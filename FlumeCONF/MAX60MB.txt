@@ -1,0 +1,56 @@
+#############start flume.conf####################
+
+spoolDir.sources = src-1
+
+spoolDir.channels = channel-1
+
+spoolDir.sinks = sink_to_hdfs1
+
+######## source
+
+
+spoolDir.sources.src-1.type = spooldir
+
+spoolDir.sources.src-1.channels = channel-1
+
+spoolDir.sources.src-1.spoolDir = /usr/local/hadoop/Flume/SpoolDir
+
+spoolDir.sources.src-1.fileHeader = true
+
+spoolDir.sources.src-1.basenameHeader =true
+
+spoolDir.sources.src-1.batchSize = 100000
+
+######## channel
+spoolDir.channels.channel-1.type = memory
+
+spoolDir.channels.channel-1.transactionCapacity = 50000000
+
+spoolDir.channels.channel-1.capacity = 60000000
+
+spoolDir.channels.channel-1.byteCapacityBufferPercentage = 20
+
+spoolDir.channels.channel-1.byteCapacity = 6442450944
+
+######## sink 
+spoolDir.sinks.sink_to_hdfs1.type = hdfs
+
+spoolDir.sinks.sink_to_hdfs1.channel = channel-1
+
+spoolDir.sinks.sink_to_hdfs1.hdfs.fileType = DataStream
+
+spoolDir.sinks.sink_to_hdfs1.hdfs.path = hdfs://master:54310/PorcoDio
+
+spoolDir.sinks.sink_to_hdfs1.hdfs.filePrefix = %{basename}-
+
+spoolDir.sinks.sink_to_hdfs1.hdfs.batchSize = 100000
+
+spoolDir.sinks.sink_to_hdfs1.hdfs.rollInterval = 0
+
+spoolDir.sinks.sink_to_hdfs1.hdfs.rollSize = 0
+
+spoolDir.sinks.sink_to_hdfs1.hdfs.rollCount = 0
+
+spoolDir.sinks.sink_to_hdfs1.hdfs.idleTimeout = 60
+
+#############end flume.conf####################
