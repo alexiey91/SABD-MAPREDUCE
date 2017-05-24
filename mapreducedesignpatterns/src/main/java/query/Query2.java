@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import designpattern.ordering.TotalOrdering;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -93,7 +94,7 @@ public class Query2 {
 
             String line = value.toString();
 
-            System.out.println("2MAP:"+ key.toString());
+           // System.out.println("2MAP:"+ key.toString());
 
             outKey.set(key.toString());
             outValue.set(line);
@@ -164,7 +165,11 @@ public class Query2 {
             /* Serialize topic */
             //String serializedTopic = gson.toJson(categories);
             for(Categories c :categories) {
-                context.write(new Text(c.getGenres()), new Text(c.getRatingNumber().toString() + ":" +
+                if(c.getRatingVar().isNaN()||c.getRatingVar()== 0.0)
+                    context.write(new Text(c.getGenres()), new Text(c.getRatingNumber().toString() + ":" +
+                        c.getRating().toString() + ":0.0"));
+                else
+                    context.write(new Text(c.getGenres()), new Text(c.getRatingNumber().toString() + ":" +
                         c.getRating().toString() + ":" + c.getRatingVar().toString()));
             }
             //System.out.println("Reducer:"+serializedTopic.toString());
@@ -203,11 +208,12 @@ public class Query2 {
             for (Text t : values) {
                 //n:avg:var
                 String[] s = t.toString().split(":");
+                //System.out.println("S-REDUCER:"+key.toString()+":"+s[0]+":"+s[1]+":"+s[2]);
                 categories.addRatingMod(Double.parseDouble(s[0]),Double.parseDouble(s[1]),Double.parseDouble(s[2]));
                 //bisogna fare una media pesata incrementale
 
             }
-            System.out.println("S-REDUCER:"+key.toString()+":"+categories.getRating()+":"+categories.getRatingVar());
+            //System.out.println("S-REDUCER:"+key.toString()+":"+categories.getRating()+":"+categories.getRatingVar());
             /* Serialize topic */
            // String serializedTopic = gson.toJson(categories);
 
@@ -264,7 +270,7 @@ public class Query2 {
 
             /* Reduce: identity function (the important data is the key, value is null) */
             orderJob.setReducerClass(Query2.SecondReducer.class);
-            orderJob.setNumReduceTasks(10);
+            orderJob.setNumReduceTasks(15);
 
             orderJob.setOutputKeyClass(Text.class);
             orderJob.setOutputValueClass(Text.class);
@@ -284,6 +290,15 @@ public class Query2 {
         /* Clean up the partition file and the staging directory */
         FileSystem.get(new Configuration()).delete(partitionFile, false);
         FileSystem.get(new Configuration()).delete(outputStage, true);
+        /*Path[] fragments = new Path[15];
+        for(int i=0;i< 10;i++) {
+            fragments[i] = new Path(outputOrder + "part-r-0000" + i);
+            if (i>=10)
+                fragments[i] = new Path(outputOrder + "part-r-000" + i);
+        }*/
+        FileUtil.copyMerge(FileSystem.get(new Configuration()),outputOrder,
+                FileSystem.get(new Configuration()),new Path(outputOrder+"Compact"),true,conf,"");
+        //FileSystem.get(new Configuration()).concat(new Path(outputOrder+"Compact"),fragments);
 
         /* Wait for job termination */
         System.exit(code);
