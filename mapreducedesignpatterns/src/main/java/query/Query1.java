@@ -21,6 +21,8 @@ import java.io.IOException;
 import java.util.Calendar;
 import java.util.Date;
 
+import static query.Query2.TopWaterfallReducer.ValueType.RATING;
+
 public class Query1 {
 
     public static abstract class GenericHierarchyMapper extends Mapper<Object, Text, IntWritable, Text> {
