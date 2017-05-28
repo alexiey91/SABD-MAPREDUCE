@@ -1,8 +1,6 @@
 package query;
 
 import com.google.gson.Gson;
-import designpattern.ordering.TotalOrdering;
-import org.apache.commons.lang.ObjectUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -22,7 +20,7 @@ import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.hadoop.mapreduce.lib.partition.InputSampler;
 import org.apache.hadoop.mapreduce.lib.partition.TotalOrderPartitioner;
 import util.FilmRating;
-import util.Films;
+
 
 import java.io.IOException;
 import java.util.Calendar;
@@ -30,7 +28,7 @@ import java.util.Calendar;
 /**
  * Created by alessandro on 26/05/2017.
  */
-public class Query3 {
+public class Query3b {
 
     public static abstract class GenericHierarchyMapper extends Mapper<Object, Text, IntWritable, Text> {
 
@@ -71,7 +69,6 @@ public class Query3 {
 
             }else{
                 movieId = parts[0];
-                System.out.println("MovieId "+movieId);
                 for(int j = 1;j<parts.length-1;j++)
                     content += parts[j];//title
             }
@@ -184,8 +181,8 @@ public class Query3 {
 
         /* Create and configure a new MapReduce Job */
         Configuration conf = new Configuration();
-        Job job = Job.getInstance(conf, "Query3");
-        job.setJarByClass(Query3.class);
+        Job job = Job.getInstance(conf, "Query3b");
+        job.setJarByClass(Query3b.class);
         Path partitionFile = new Path(args[2] + "_partitions.lst");
         Path outputStage = new Path(args[2] + "_staging");
         Path outputOrder = new Path(args[2]);
@@ -201,14 +198,14 @@ public class Query3 {
         job.setReducerClass(TopicHierarchyReducer.class);
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(Text.class);
-        job.setNumReduceTasks(30);
+        job.setNumReduceTasks(1);
 
 
-        job.setPartitionerClass(DatePartitioner.class);
+        //job.setPartitionerClass(DatePartitioner.class);
 
         /* Set output files/directories using command line arguments */
         //FileOutputFormat.setOutputPath(job, new Path(args[2]));
-        FileOutputFormat.setOutputPath(job,outputStage);
+        //FileOutputFormat.setOutputPath(job,outputStage);
         job.setOutputFormatClass(SequenceFileOutputFormat.class);
         SequenceFileOutputFormat.setOutputPath(job, outputStage);
         int code = job.waitForCompletion(true) ? 0 : 1;
@@ -217,14 +214,14 @@ public class Query3 {
         if (code == 0) {
 
             /* **** Job #2: Ordering phase **** */
-            Job orderJob = Job.getInstance(conf, "Query3");
-            orderJob.setJarByClass(Query3.class);
+            Job orderJob = Job.getInstance(conf, "Query3b");
+            orderJob.setJarByClass(Query3b.class);
 
             /* Map: identity function outputs the key/value pairs in the SequenceFile */
             orderJob.setMapperClass(Mapper.class);
 
             /* Reduce: identity function (the important data is the key, value is null) */
-            orderJob.setReducerClass(Query3.OrderingPhaseReducer.class);
+            orderJob.setReducerClass(OrderingPhaseReducer.class);
             orderJob.setNumReduceTasks(10);
 
             /* Route key/value pairs to reducers, using the splits previously computed
@@ -232,7 +229,7 @@ public class Query3 {
             orderJob.setPartitionerClass(TotalOrderPartitioner.class);
             TotalOrderPartitioner.setPartitionFile(orderJob.getConfiguration(), partitionFile);
             orderJob.setOutputKeyClass(Text.class);
-            orderJob.setOutputValueClass(NullWritable.class);
+            orderJob.setOutputValueClass(Text.class);
 
 
             /* Set input and output files: the input is the previous job's output */
@@ -252,7 +249,7 @@ public class Query3 {
         }
 
         /* Clean up the partition file and the staging directory */
-        FileSystem.get(new Configuration()).delete(partitionFile, false);
+       // FileSystem.get(new Configuration()).delete(partitionFile, false);
         FileSystem.get(new Configuration()).delete(outputStage, true);
 
         /* Wait for job termination */
