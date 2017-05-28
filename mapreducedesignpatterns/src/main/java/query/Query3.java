@@ -71,7 +71,6 @@ public class Query3 {
 
             }else{
                 movieId = parts[0];
-                System.out.println("MovieId "+movieId);
                 for(int j = 1;j<parts.length-1;j++)
                     content += parts[j];//title
             }
@@ -126,7 +125,7 @@ public class Query3 {
 
             }
 
-             context.write(new Text(films.getRatingAvgPrev().toString()),new Text(films.getTitle()+":"+films.getRatingAvgLast()));
+             context.write(new Text(films.getRatingAvgPrev().toString()),new Text(films.getTitle()+":"+films.getRatingAvgPrev()+":"+films.getRatingAvgLast()));
 
         }
 
@@ -174,7 +173,7 @@ public class Query3 {
         public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
 
             for (Text t : values) {
-                context.write(new Text(key.toString()+","+t), NullWritable.get());
+                context.write(t, NullWritable.get());
             }
 
         }
@@ -204,7 +203,7 @@ public class Query3 {
         job.setNumReduceTasks(30);
 
 
-        job.setPartitionerClass(DatePartitioner.class);
+        //job.setPartitionerClass(DatePartitioner.class);
 
         /* Set output files/directories using command line arguments */
         //FileOutputFormat.setOutputPath(job, new Path(args[2]));
@@ -230,6 +229,7 @@ public class Query3 {
             /* Route key/value pairs to reducers, using the splits previously computed
                the TotalOlderPartitioner already implements this functionality */
             orderJob.setPartitionerClass(TotalOrderPartitioner.class);
+            //System.out.print("PATH"+ partitionFile);
             TotalOrderPartitioner.setPartitionFile(orderJob.getConfiguration(), partitionFile);
             orderJob.setOutputKeyClass(Text.class);
             orderJob.setOutputValueClass(NullWritable.class);

@@ -21,8 +21,6 @@ import java.io.IOException;
 import java.util.Calendar;
 import java.util.Date;
 
-import static query.Query2.TopWaterfallReducer.ValueType.RATING;
-
 public class Query1 {
 
     public static abstract class GenericHierarchyMapper extends Mapper<Object, Text, IntWritable, Text> {
@@ -49,7 +47,7 @@ public class Query1 {
                 temp1.setTimeInMillis(Long.parseLong(parts[3])*1000);
                 /*if(temp1.getTime().compareTo(temp.getTime())<0)
                     System.out.println("VECCHIO RATING"+temp1.getTime());*/
-                if(Double.parseDouble(parts[2])< 4.0 || temp1.getTime().compareTo(temp.getTime())<0)
+                if(temp1.getTime().compareTo(temp.getTime())<0)
                     return;
                 movieId = parts[1];
                 content = parts[2];//rating
@@ -112,8 +110,8 @@ public class Query1 {
             /* Serialize topic */
             String serializedTopic = gson.toJson(films);
             //System.out.println("FILMS-reducer"+serializedTopic+"Title"+films.getTitle());
-            if(films.getRatingNumber() > (Double) 0.0)
-                context.write(new Text(films.getTitle()), new Text(films.getRating().toString()));
+            if(films.getRatingNumber() > (Double) 0.0 && films.getRating() > 4.0)
+                context.write(new Text(films.getTitle()), new Text("#rating:"+films.getRatingNumber()+";value:"+films.getRating().toString()));
                 //context.write(new Text(serializedTopic), NullWritable.get());
 
         }
