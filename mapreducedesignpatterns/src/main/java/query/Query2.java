@@ -221,6 +221,7 @@ public class Query2 {
            +categories.getRating()+",VAR:"+categories.getRatingVar()+"]" ),NullWritable.get());
         }
     }
+
     public static void main(String[] args) throws Exception {
 
         /* **** Job #1: Analyze phase **** */
