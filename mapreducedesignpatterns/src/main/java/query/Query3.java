@@ -28,10 +28,38 @@ import java.lang.reflect.Array;
 import java.util.Calendar;
 import java.util.regex.Pattern;
 
+import static java.lang.StrictMath.max;
+import static java.lang.StrictMath.min;
+
 /**
  * Created by alessandro on 26/05/2017.
  */
 public class Query3 {
+    public static class PostOldMapper extends Mapper<Object, Text, IntWritable, Text>{
+        private IntWritable outkey = new IntWritable();
+
+        public void map(Object key, Text value, Context context)
+                        throws IOException, InterruptedException {
+            //value è del tipo id:titolo:newRate:posizione risp all'id
+            //pos corrisponde al numero totale di film con rating superiore a key
+            long pos = max(0,context.getConfiguration().getLong(""+(49-Integer.valueOf(key.toString())),0));
+
+            //outkey.set(Integer.valueOf(key.toString()));
+            String[] ar= value.toString().split(":");
+            pos += Long.parseLong(ar[ar.length-1]);
+            Double newRate = Double.parseDouble(ar[ar.length-2])*10;
+            String nRt= newRate.toString().split(Pattern.quote("."))[0];
+            outkey.set(Integer.parseInt(nRt.toString()));
+            String outValue= "";
+            for(int k=0;k<ar.length-2;k++)
+                outValue+=ar[k];
+            outValue+=" --oldPosition:"+pos;
+            context.write(outkey,new Text(outValue));
+            //System.out.println(key.toString()+"+++-----------------POS----------------:"+pos);
+
+            //context.write(outkey,new Text(value.toString()+"-oldPosition:"+pos));
+        }
+    }
 
     public static class PreOldMapper extends Mapper<Object, Text, IntWritable, Text> {
 
@@ -39,10 +67,11 @@ public class Query3 {
 
         public void map(Object key, Text value, Context context)
                 throws IOException, InterruptedException {
+            //il contatore della chiave k = contatore[50-k], k compr [0,50]
+            context.getCounter("SINGLE_COUNT", "" + (50 - Integer.valueOf(key.toString()))).increment(1);
+
             outkey.set(Integer.valueOf(key.toString()));
             context.write(outkey, value);
-            //la chiave non è ancora ribaltata 50=50,49=49 ...
-            context.getCounter("SINGLE_COUNT", "" + (50 - Integer.valueOf(key.toString()))).increment(1);
         }
 
     }
@@ -95,18 +124,6 @@ public class Query3 {
         }
     }
 
-    public static class DatePartitioner extends Partitioner<IntWritable, Text> {
-
-        public int getPartition(IntWritable key, Text value, int numPartitions) {
-            // System.out.println("PARTITIONER "+ key.get()+":"+(key.get()) % numPartitions);
-            return (50 - key.get());
-            /*la posizione è inversamente proporzionale alle stelle guadagnate
-             5.0 stelle = 50 -> partition[0]
-             4.9 stelle = 49 -> partition[1]
-             ...
-              */
-        }
-    }
 
     public static class RatingMapper extends GenericHierarchyMapper {
         public RatingMapper() {
@@ -120,7 +137,7 @@ public class Query3 {
         }
     }
 
-    public static class TopicHierarchyReducer extends
+    public static class UnionReducer extends
             //Reducer<IntWritable, Text, Text, NullWritable> {
             Reducer<IntWritable, Text, Text, Text> {
 
@@ -148,11 +165,14 @@ public class Query3 {
             Double d = Math.floor(films.getRatingAvgPrev() * 10);
             //System.out.print("KEY"+d.toString().split(Pattern.quote("."))[0]);
             String[] array = d.toString().split(Pattern.quote("."));
-            if (films.getRatingNumberPrev() > 5.0)
-                context.write(new Text(array[0]), new Text(films.getTitle() + ":" + films.getRatingAvgLast()));
-            else
-                context.write(new Text("0"), new Text(films.getTitle() + ":" + films.getRatingAvgLast()));
+            if (films.getRatingNumberLast() > 5.0) {
+                if (films.getRatingNumberPrev() > 5.0)
+                    context.write(new Text(array[0]), new Text(films.getTitle() + ":" + films.getRatingAvgLast()));
+                else
+                    context.write(new Text("0"), new Text(films.getTitle() + ":" + films.getRatingAvgLast()));
+            }
         }
+
 
 
         private ValueType discriminate(String value) {
@@ -191,6 +211,7 @@ public class Query3 {
     }
 
 
+
     public static class OrderingPhaseReducer extends Reducer<IntWritable, Text, Text, Text> {
 
         public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
@@ -210,8 +231,29 @@ public class Query3 {
                 context.write(new Text(key.toString()), new Text(t + ":" + count));
             }
         }
+    }
+    public static class PostOrderingReducer extends Reducer<IntWritable, Text, Text, Text> {
 
+        public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+            // System.out.println("KEY REDUCER"+key.toString());
 
+            for (Text t : values) {
+                //context.write(new Text(key.toString()),t);
+                context.write(new Text(key.toString()), new Text(t));
+            }
+        }
+    }
+    public static class DatePartitioner extends Partitioner<IntWritable, Text> {
+
+        public int getPartition(IntWritable key, Text value, int numPartitions) {
+            // System.out.println("PARTITIONER "+ key.get()+":"+(key.get()) % numPartitions);
+            return (50 - key.get());
+            /*la posizione è inversamente proporzionale alle stelle guadagnate
+             5.0 stelle = 50 -> partition[0]
+             4.9 stelle = 49 -> partition[1]
+             ...
+              */
+        }
     }
 
     public static void main(String[] args) throws Exception {
@@ -228,7 +270,7 @@ public class Query3 {
 
         job.setMapOutputKeyClass(IntWritable.class);
         /* Reduce function */
-        job.setReducerClass(TopicHierarchyReducer.class);
+        job.setReducerClass(UnionReducer.class);
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(Text.class);
         job.setNumReduceTasks(30);
@@ -269,11 +311,13 @@ public class Query3 {
             orderJob.setPartitionerClass(DatePartitioner.class);
 
         /* Set input and output files */
-            orderJob.getConfiguration().set("mapred.textoutputformat.separator", "");
 
             orderJob.setInputFormatClass(SequenceFileInputFormat.class);
             SequenceFileInputFormat.setInputPaths(orderJob, unionStage);
-            TextOutputFormat.setOutputPath(orderJob, preOldPositioning);
+
+            orderJob.setOutputFormatClass(SequenceFileOutputFormat.class);
+            SequenceFileOutputFormat.setOutputPath(orderJob, preOldPositioning);
+//             TextOutputFormat.setOutputPath(orderJob, preOldPositioning);
          /*   orderJob.setOutputFormatClass(SequenceFileOutputFormat.class);
             SequenceFileOutputFormat.setOutputPath(orderJob, preOldPositioning);*/
 
@@ -282,63 +326,61 @@ public class Query3 {
 
 
             Counters cs = orderJob.getCounters();
-            for (int i = 1; i < 50; i++) {
+            for (int i = 0; i < 51; i++) {
                 Counter c = cs.findCounter("SINGLE_COUNT", "" + i);
                 System.out.println("count[" + i + "]:" + c.getDisplayName() + ":" + c.getName() + ":" + c.getValue());
             }
+            Job positioningJob = Job.getInstance(conf, "Query3");
 
-            for (int i = 1; i < 50; i++) {
+            positioningJob.getConfiguration().setLong("0", cs.findCounter("SINGLE_COUNT", "0").getValue());
+            for (int i = 1; i < 51; i++) {
+
                 Counter c = cs.findCounter("SINGLE_COUNT", "" + i);
                 c.increment(cs.findCounter("SINGLE_COUNT", "" + (i - 1)).getValue());
+                positioningJob.getConfiguration().setLong(c.getName(), c.getValue());
 
                 System.out.println("count[" + i + "]:" + c.getDisplayName() + ":" + c.getName() + ":" + c.getValue());
             }
-            /**terzo step*/
-           /* if (code == 0) {
-                Job positioningJob = Job.getInstance(conf, "Query3");
-           *//* cs.addGroup("SINGLE_COUNT","SINGLE_COUNT");
-            cs.addGroup("CUMULATIVE_COUNT","CUMULATIVE_COUNT");
-            for(int i=0;i<50;i++) {
-                cs.getGroup("SINGLE_COUNT").addCounter("" + i, "" + i, 0);
-                cs.getGroup("CUMULATIVE_COUNT").addCounter("" + i, "" + i, 0);
-            }*//*
+                /**terzo step*/
+            if (code == 0) {
+
                 positioningJob.setJarByClass(Query3.class);
 
-        *//* Map: samples data; Reduce: identity function *//*
-                positioningJob.setMapperClass(PreOldMapper.class);
+        /* Map: samples data; Reduce: identity function */
+                positioningJob.setMapperClass(PostOldMapper.class);
                 positioningJob.setMapOutputKeyClass(IntWritable.class);
                 positioningJob.setMapOutputValueClass(Text.class);
-                positioningJob.setReducerClass(OrderingPhaseReducer.class);
+                positioningJob.setReducerClass(PostOrderingReducer.class);
                 positioningJob.setNumReduceTasks(51);
                 positioningJob.setOutputKeyClass(Text.class);
                 positioningJob.setOutputValueClass(Text.class);
 
                 positioningJob.setPartitionerClass(DatePartitioner.class);
 
-        *//* Set input and output files *//*
-                positioningJob.getConfiguration().set("mapred.textoutputformat.separator", "");
+        /* Set input and output files */
+                positioningJob.getConfiguration().set("mapreduce.output.textoutputformat.separator", "");
 
                 positioningJob.setInputFormatClass(SequenceFileInputFormat.class);
                 SequenceFileInputFormat.setInputPaths(positioningJob, preOldPositioning);
-                TextOutputFormat.setOutputPath(orderJob, oldPositioning);
-         *//*   orderJob.setOutputFormatClass(SequenceFileOutputFormat.class);
-            SequenceFileOutputFormat.setOutputPath(orderJob, preOldPositioning);*//*
+                TextOutputFormat.setOutputPath(positioningJob, oldPositioning);
+         /*   orderJob.setOutputFormatClass(SequenceFileOutputFormat.class);
+            SequenceFileOutputFormat.setOutputPath(orderJob, preOldPositioning);*/
 
 
-        *//* Submit the job and get completion code. *//*
-                code = orderJob.waitForCompletion(true) ? 0 : 3;
+        /* Submit the job and get completion code. */
+                code = positioningJob.waitForCompletion(true) ? 0 : 3;
 
-
-            }*/
+            }
 
         /* Clean up the partition file and the staging directory */
-           // FileSystem.get(new Configuration()).delete(partitionFile, false);
-            //FileSystem.get(new Configuration()).delete(outputStage, true);
-            FileSystem.get(new Configuration()).delete(new Path(unionStage + "/*"), true);
-            FileSystem.get(new Configuration()).delete(unionStage, true);
+            // FileSystem.get(new Configuration()).delete(partitionFile, false);
+        }
+        FileSystem.get(new Configuration()).delete(preOldPositioning, true);
+        FileSystem.get(new Configuration()).delete(new Path(unionStage + "/*"), true);
+        FileSystem.get(new Configuration()).delete(unionStage, true);
 
         /* Wait for job termination */
-            System.exit(code);
-        }
+        System.exit(code);
     }
 }
+
