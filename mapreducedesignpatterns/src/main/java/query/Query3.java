@@ -5,6 +5,7 @@ import designpattern.ordering.TotalOrdering;
 import org.apache.commons.lang.ObjectUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.util.ByteArrayManager;
 import org.apache.hadoop.io.IntWritable;
@@ -29,12 +30,45 @@ import java.util.Calendar;
 import java.util.regex.Pattern;
 
 import static java.lang.StrictMath.max;
-import static java.lang.StrictMath.min;
 
 /**
  * Created by alessandro on 26/05/2017.
  */
 public class Query3 {
+
+    public static class FinalOrderingMapper extends Mapper<Object, Text, IntWritable, Text> {
+
+        public void map(Object key, Text value, Context context)
+                throws IOException, InterruptedException {
+            //il contatore della chiave k = contatore[50-k], k compr [0,50]
+            if(Integer.valueOf(key.toString())<=10)
+                context.write(new IntWritable(Integer.valueOf(key.toString())), value);
+        }
+
+    }
+
+    public static class LastMapper extends Mapper<Object, Text, IntWritable, Text>{
+        private IntWritable outkey = new IntWritable();
+
+        public void map(Object key, Text value, Context context)
+                throws IOException, InterruptedException {
+            //value è del tipo id:titolo:vecchia posizione:posizione locale ultimo anno risp all'id
+            //pos corrisponde al numero totale di film con rating superiore a key
+            long pos = max(0,context.getConfiguration().getLong(""+(49-Integer.valueOf(key.toString())),0));
+
+            String[] ar= value.toString().split(":");
+            pos += Long.parseLong(ar[ar.length-1]);
+           // outkey.set((int)pos);
+            outkey.set(Integer.valueOf(key.toString()));
+
+
+            String outValue= ar[0];
+            for(int k=1;k<ar.length-1;k++)
+                outValue+=":"+ar[k];
+            //new value è del tipo id:titolo:vecchia posizione:posizione iniziale fascia rating corrente
+            context.write(outkey,new Text(outValue+":Position:"+pos));
+        }
+    }
     public static class PostOldMapper extends Mapper<Object, Text, IntWritable, Text>{
         private IntWritable outkey = new IntWritable();
 
@@ -47,14 +81,18 @@ public class Query3 {
             //outkey.set(Integer.valueOf(key.toString()));
             String[] ar= value.toString().split(":");
             pos += Long.parseLong(ar[ar.length-1]);
-            Double newRate = Double.parseDouble(ar[ar.length-2])*10;
+            Double newRate = Math.floor(Double.parseDouble(ar[ar.length-2])*10);
             String nRt= newRate.toString().split(Pattern.quote("."))[0];
-            outkey.set(Integer.parseInt(nRt.toString()));
-            String outValue= "";
-            for(int k=0;k<ar.length-2;k++)
-                outValue+=ar[k];
+            outkey.set(Integer.parseInt(nRt));
+            String outValue= ar[0];
+            for(int k=1;k<ar.length-2;k++)
+                outValue+=":"+ar[k];
             outValue+=" --oldPosition:"+pos;
+            context.getCounter("SINGLE_COUNT", "" + (50 - Integer.parseInt(nRt))).increment(1);
+
             context.write(outkey,new Text(outValue));
+
+
             //System.out.println(key.toString()+"+++-----------------POS----------------:"+pos);
 
             //context.write(outkey,new Text(value.toString()+"-oldPosition:"+pos));
@@ -115,7 +153,7 @@ public class Query3 {
             } else {
                 movieId = parts[0];
                 for (int j = 1; j < parts.length - 1; j++)
-                    content += parts[j];//title
+                    content += ":"+parts[j];//title
             }
             outKey.set(Integer.parseInt(movieId));
             outValue.set(valuePrefix + content);
@@ -217,14 +255,7 @@ public class Query3 {
         public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
             // System.out.println("KEY REDUCER"+key.toString());
             long count = 0;
-            /*int keyI= 50-key.get();
-            *//*i valori con chiave j controllano il #tuple con chiave k>j e
-            / quindi quelle con valutazione maggiore di quella di j
-            *//*
-            for(int i=0;i<keyI;i++) {
-                count += context.getCounter("SINGLE_COUNT", "" + i).getValue();
-                System.out.println("reduce["+key.get()+"]:"+count+"adding("+context.getCounter("SINGLE_COUNT", "" + i).getValue()+")");
-            }*/
+
             for (Text t : values) {
                 //context.write(new Text(key.toString()),t);
                 count++;
@@ -236,12 +267,43 @@ public class Query3 {
 
         public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
             // System.out.println("KEY REDUCER"+key.toString());
+            long count = 0;
 
             for (Text t : values) {
+                count++;
                 //context.write(new Text(key.toString()),t);
-                context.write(new Text(key.toString()), new Text(t));
+                context.write(new Text(key.toString()), new Text(t.toString() + ":" + count));
             }
         }
+    }
+    public static class LastPositionReducer extends Reducer<IntWritable, Text, Text, Text> {
+
+        public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+            int pos;
+
+            for (Text t : values) {
+                String[] ar= t.toString().split(":");
+                pos = Integer.parseInt(ar[ar.length - 1]);
+                String outValue= ar[0];
+                for(int k=1;k<ar.length-2;k++)
+                    outValue+=":"+ar[k];
+
+                //context.write(new Text(key.toString()),t);
+                context.write(new Text(pos+""),new Text(outValue));
+                //context.write(new Text(outkey+""),t);
+            }
+        }
+    }
+    public static class FinalOrderingReducer extends Reducer<IntWritable, Text, Text, NullWritable> {
+
+        public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+
+            for (Text t : values) {
+                context.write(new Text(key.toString()+":::"+t.toString()), NullWritable.get());
+            }
+
+        }
+
     }
     public static class DatePartitioner extends Partitioner<IntWritable, Text> {
 
@@ -255,17 +317,25 @@ public class Query3 {
               */
         }
     }
+    public static class FinalPartitioner extends Partitioner<IntWritable, Text> {
+
+        public int getPartition(IntWritable key, Text value, int numPartitions) {
+            // System.out.println("PARTITIONER "+ key.get()+":"+(key.get()) % numPartitions);
+            return (key.get()-1)%numPartitions;
+
+        }
+    }
 
     public static void main(String[] args) throws Exception {
 
         Configuration conf = new Configuration();
         Job job = Job.getInstance(conf, "Query3");
         job.setJarByClass(Query3.class);
-       // Path partitionFile = new Path(args[2] + "_partitions.lst");
         Path unionStage = new Path(args[2] + "_union");
-        //Path outputStage = new Path(args[2] + "_staging");
         Path preOldPositioning = new Path(args[2] + "_preOldPositioning");
-        Path oldPositioning = new Path(args[2]);
+        Path oldPositioning = new Path(args[2]+"_oldPositioning");
+        Path finalPositioning= new Path(args[2]+"_newPos");
+        Path finalResult = new Path(args[2]);
 
 
         job.setMapOutputKeyClass(IntWritable.class);
@@ -328,7 +398,7 @@ public class Query3 {
             Counters cs = orderJob.getCounters();
             for (int i = 0; i < 51; i++) {
                 Counter c = cs.findCounter("SINGLE_COUNT", "" + i);
-                System.out.println("count[" + i + "]:" + c.getDisplayName() + ":" + c.getName() + ":" + c.getValue());
+                //System.out.println("count[" + i + "]:" + c.getDisplayName() + ":" + c.getName() + ":" + c.getValue());
             }
             Job positioningJob = Job.getInstance(conf, "Query3");
 
@@ -339,14 +409,14 @@ public class Query3 {
                 c.increment(cs.findCounter("SINGLE_COUNT", "" + (i - 1)).getValue());
                 positioningJob.getConfiguration().setLong(c.getName(), c.getValue());
 
-                System.out.println("count[" + i + "]:" + c.getDisplayName() + ":" + c.getName() + ":" + c.getValue());
+                //System.out.println("count[" + i + "]:" + c.getDisplayName() + ":" + c.getName() + ":" + c.getValue());
             }
                 /**terzo step*/
             if (code == 0) {
 
                 positioningJob.setJarByClass(Query3.class);
 
-        /* Map: samples data; Reduce: identity function */
+                /* Map: samples data; Reduce: identity function */
                 positioningJob.setMapperClass(PostOldMapper.class);
                 positioningJob.setMapOutputKeyClass(IntWritable.class);
                 positioningJob.setMapOutputValueClass(Text.class);
@@ -357,30 +427,101 @@ public class Query3 {
 
                 positioningJob.setPartitionerClass(DatePartitioner.class);
 
-        /* Set input and output files */
-                positioningJob.getConfiguration().set("mapreduce.output.textoutputformat.separator", "");
+                /* Set input and output files */
+                //positioningJob.getConfiguration().set("mapreduce.output.textoutputformat.separator", "");
 
                 positioningJob.setInputFormatClass(SequenceFileInputFormat.class);
                 SequenceFileInputFormat.setInputPaths(positioningJob, preOldPositioning);
-                TextOutputFormat.setOutputPath(positioningJob, oldPositioning);
-         /*   orderJob.setOutputFormatClass(SequenceFileOutputFormat.class);
-            SequenceFileOutputFormat.setOutputPath(orderJob, preOldPositioning);*/
+                //TextOutputFormat.setOutputPath(positioningJob, oldPositioning);
+                positioningJob.setOutputFormatClass(SequenceFileOutputFormat.class);
+                SequenceFileOutputFormat.setOutputPath(positioningJob, oldPositioning);
 
-
-        /* Submit the job and get completion code. */
                 code = positioningJob.waitForCompletion(true) ? 0 : 3;
 
+                Job lastJob = Job.getInstance(conf, "Query3");
+                cs = positioningJob.getCounters();
+                lastJob.getConfiguration().setLong("0", cs.findCounter("SINGLE_COUNT", "0").getValue());
+                for (int i = 1; i < 51; i++) {
+
+                    Counter c = cs.findCounter("SINGLE_COUNT", "" + i);
+             //       System.out.println("count[" + i + "]:" + c.getDisplayName() + ":" + c.getName() + ":" + c.getValue());
+
+                    c.increment(cs.findCounter("SINGLE_COUNT", "" + (i - 1)).getValue());
+                    lastJob.getConfiguration().setLong(c.getName(), c.getValue());
+
+             //       System.out.println("*count[" + i + "]:" + c.getDisplayName() + ":" + c.getName() + ":" + c.getValue());
+                }
+
+                /**quarto step*/
+                if (code == 0) {
+
+                    lastJob.setJarByClass(Query3.class);
+
+                    /* Map: samples data; Reduce: identity function */
+                    lastJob.setMapperClass(LastMapper.class);
+                    lastJob.setMapOutputKeyClass(IntWritable.class);
+                    lastJob.setMapOutputValueClass(Text.class);
+                    lastJob.setReducerClass(LastPositionReducer.class);
+                    lastJob.setNumReduceTasks(50);
+                    lastJob.setOutputKeyClass(Text.class);
+                    lastJob.setOutputValueClass(Text.class);
+
+                    lastJob.setPartitionerClass(DatePartitioner.class);
+
+
+                    lastJob.getConfiguration().set("mapreduce.output.textoutputformat.separator", "");
+
+                    lastJob.setInputFormatClass(SequenceFileInputFormat.class);
+                    SequenceFileInputFormat.setInputPaths(lastJob, oldPositioning);
+                    //TextOutputFormat.setOutputPath(lastJob, finalPositioning);
+                    lastJob.setOutputFormatClass(SequenceFileOutputFormat.class);
+                    SequenceFileOutputFormat.setOutputPath(lastJob, finalPositioning);
+
+                    /* Submit the job and get completion code. */
+                    code = lastJob.waitForCompletion(true) ? 0 : 4;
+                    /**quinto step*/
+                    if (code == 0) {
+                        Job orderFinalJob = Job.getInstance(conf, "Query3");
+
+                        orderFinalJob.setJarByClass(Query3.class);
+
+                    /* Map: samples data; Reduce: identity function */
+                        orderFinalJob.setMapperClass(FinalOrderingMapper.class);
+                        orderFinalJob.setReducerClass(FinalOrderingReducer.class);
+                        orderFinalJob.setMapOutputKeyClass(IntWritable.class);
+                        orderFinalJob.setMapOutputValueClass(Text.class);
+                        orderFinalJob.setNumReduceTasks(1);
+                        orderFinalJob.setOutputKeyClass(Text.class);
+                        orderFinalJob.setOutputValueClass(Text.class);
+
+                        orderFinalJob.setPartitionerClass(FinalPartitioner.class);
+
+
+                        orderFinalJob.getConfiguration().set("mapreduce.output.textoutputformat.separator", "");
+
+                        orderFinalJob.setInputFormatClass(SequenceFileInputFormat.class);
+                        SequenceFileInputFormat.setInputPaths(orderFinalJob, finalPositioning);
+                        TextOutputFormat.setOutputPath(orderFinalJob, finalResult);
+
+                    /* Submit the job and get completion code. */
+                        code = orderFinalJob.waitForCompletion(true) ? 0 : 5;
+
+                    }
+                }
             }
 
-        /* Clean up the partition file and the staging directory */
-            // FileSystem.get(new Configuration()).delete(partitionFile, false);
+
         }
-        FileSystem.get(new Configuration()).delete(preOldPositioning, true);
+        /* Clean up the partition file and the staging directory */
+
         FileSystem.get(new Configuration()).delete(new Path(unionStage + "/*"), true);
         FileSystem.get(new Configuration()).delete(unionStage, true);
+        FileSystem.get(new Configuration()).delete(new Path( preOldPositioning+ "/*"), true);
+        FileSystem.get(new Configuration()).delete(preOldPositioning, true);
+        FileSystem.get(new Configuration()).delete(new Path(oldPositioning + "/*"), true);
+        FileSystem.get(new Configuration()).delete(oldPositioning, true);
 
-        /* Wait for job termination */
+
         System.exit(code);
     }
 }
-
