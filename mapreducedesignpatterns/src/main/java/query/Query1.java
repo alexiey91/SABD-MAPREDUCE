@@ -4,6 +4,15 @@ import com.google.gson.Gson;
 import designpattern.partitioning.PartitionDataByYear;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.HBaseConfiguration;
+import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.Scan;
+import org.apache.hadoop.hbase.client.Table;
+import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
+import org.apache.hadoop.hbase.mapred.TableReduce;
+import org.apache.hadoop.hbase.mapreduce.TableMapReduceUtil;
+import org.apache.hadoop.hbase.mapreduce.TableReducer;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
@@ -15,7 +24,9 @@ import org.apache.hadoop.mapreduce.lib.input.MultipleInputs;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+import org.apache.hadoop.net.TableMapping;
 import util.Films;
+import util.HBaseClient;
 
 import java.io.IOException;
 import java.util.Calendar;
@@ -135,10 +146,98 @@ public class Query1 {
 
     }
 
-    public static void main(String[] args) throws Exception {
+    public static class TableReduce extends
+            //Reducer<IntWritable, Text, Text, NullWritable> {
+            TableReducer<IntWritable, Text, ImmutableBytesWritable> {
 
-        /* Create and configure a new MapReduce Job */
+        public enum ValueType { RATING, FILM , UNKNOWN}
+        private Gson gson = new Gson();
+
+        public void reduce(IntWritable key, Iterable<Text> values, Reducer.Context context)
+                throws IOException, InterruptedException {
+
+            Films films = new Films();
+            for (Text t : values) {
+
+                String value = t.toString();
+                if (ValueType.FILM.equals(discriminate(value))){
+                    films.setTitle(key+":"+getContent(value));
+                } else if (ValueType.RATING.equals(discriminate(value))){
+                    films.addRating(Double.parseDouble(getContent(value)));
+                }
+
+            }
+
+
+            /* Serialize topic */
+           // String serializedTopic = gson.toJson(films);
+            //System.out.println("FILMS-reducer"+serializedTopic+"Title"+films.getTitle());
+            if(films.getRatingNumber() > (Double) 0.0 && films.getRating() > 4.0)
+            {
+                Put put = new Put(Bytes.toBytes(films.getTitle()));
+                put.addColumn(Bytes.toBytes("RATING"), Bytes.toBytes("count"), Bytes.toBytes(films.getRating()));
+                put.addColumn(Bytes.toBytes("RATING_NUMBER"), Bytes.toBytes("count"), Bytes.toBytes(films.getRatingNumber()));
+
+                context.write(null, put);
+            }
+               // context.write(new Text(films.getTitle()), new Text("#rating:"+films.getRatingNumber()+";value:"+films.getRating().toString()));
+            //context.write(new Text(serializedTopic), NullWritable.get());
+
+        }
+
+        private ValueType discriminate(String value){
+
+            char d = value.charAt(0);
+            switch (d){
+                case 'R':
+                    return ValueType.RATING;
+                case 'F':
+                    return ValueType.FILM;
+            }
+
+            return ValueType.UNKNOWN;
+        }
+
+        private String getContent(String value){
+            return value.substring(1);
+        }
+
+    }
+
+
+    /*    public static void main(String[] args) throws Exception {
+
+        *//* Create and configure a new MapReduce Job *//*
         Configuration conf = new Configuration();
+        Job job = Job.getInstance(conf, "Query1");
+        job.setJarByClass(Query1.class);
+
+
+        *//* Map function, from multiple input file
+         * arg[0] rating
+         * arg[1] film*//*
+        MultipleInputs.addInputPath(job, new Path(args[0]), TextInputFormat.class, RatingMapper.class);
+        MultipleInputs.addInputPath(job, new Path(args[1]), TextInputFormat.class, FilmMapper.class);
+        job.setMapOutputKeyClass(IntWritable.class);
+        *//* Reduce function *//*
+        job.setReducerClass(TopicHierarchyReducer.class);
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(Text.class);
+        job.setNumReduceTasks(30);
+
+
+        job.setPartitionerClass(Query1.DatePartitioner.class);
+
+        *//* Set output files/directories using command line arguments *//*
+        FileOutputFormat.setOutputPath(job, new Path(args[2]));
+        job.setOutputFormatClass(TextOutputFormat.class);
+
+        *//* Wait for job termination *//*
+        System.exit(job.waitForCompletion(true) ? 0 : 1);
+
+    }*/
+    public static void main(String[] args) throws Exception {
+        Configuration conf = HBaseConfiguration.create();
         Job job = Job.getInstance(conf, "Query1");
         job.setJarByClass(Query1.class);
 
@@ -149,21 +248,30 @@ public class Query1 {
         MultipleInputs.addInputPath(job, new Path(args[0]), TextInputFormat.class, RatingMapper.class);
         MultipleInputs.addInputPath(job, new Path(args[1]), TextInputFormat.class, FilmMapper.class);
         job.setMapOutputKeyClass(IntWritable.class);
-        /* Reduce function */
-        job.setReducerClass(TopicHierarchyReducer.class);
-        job.setOutputKeyClass(Text.class);
-        job.setOutputValueClass(Text.class);
-        job.setNumReduceTasks(30);
+        job.setMapOutputValueClass(Text.class);
+       /* job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(Text.class);*/
+        job.setNumReduceTasks(1);
+        job.setPartitionerClass(DatePartitioner.class);
 
+/*
 
-        job.setPartitionerClass(Query1.DatePartitioner.class);
+        HBaseClient client = new HBaseClient();
+        if(!client.exists("query1"))
+            client.createTable("query1","RATING","RATING_NUMBER");
+*/
 
-        /* Set output files/directories using command line arguments */
-        FileOutputFormat.setOutputPath(job, new Path(args[2]));
-        job.setOutputFormatClass(TextOutputFormat.class);
+        TableMapReduceUtil.initTableReducerJob(
+                "query1",        // output table
+                TableReduce.class,    // reducer class
+                job);
+        try {
+            boolean b = job.waitForCompletion(true);
 
-        /* Wait for job termination */
-        System.exit(job.waitForCompletion(true) ? 0 : 1);
+        }catch (IOException e){
+            System.out.print("errore"+e);
 
+        }
     }
+
 }
