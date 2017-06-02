@@ -153,7 +153,7 @@ public class Query1 {
         public enum ValueType { RATING, FILM , UNKNOWN}
         private Gson gson = new Gson();
 
-        public void reduce(IntWritable key, Iterable<Text> values, Reducer.Context context)
+        public void reduce(IntWritable key, Iterable<Text> values, Context context)
                 throws IOException, InterruptedException {
 
             Films films = new Films();
@@ -175,8 +175,9 @@ public class Query1 {
             if(films.getRatingNumber() > (Double) 0.0 && films.getRating() > 4.0)
             {
                 Put put = new Put(Bytes.toBytes(films.getTitle()));
-                put.addColumn(Bytes.toBytes("RATING"), Bytes.toBytes("count"), Bytes.toBytes(films.getRating()));
-                put.addColumn(Bytes.toBytes("RATING_NUMBER"), Bytes.toBytes("count"), Bytes.toBytes(films.getRatingNumber()));
+                put.addColumn(Bytes.toBytes("RATING"), Bytes.toBytes("count"), Bytes.toBytes(films.getRating().toString()));
+
+                put.addColumn(Bytes.toBytes("RATING_NUMBER"), Bytes.toBytes("count"), Bytes.toBytes(films.getRatingNumber().toString()));
 
                 context.write(null, put);
             }
@@ -251,12 +252,10 @@ public class Query1 {
         job.setMapOutputValueClass(Text.class);
        /* job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(Text.class);*/
-        job.setNumReduceTasks(1);
-        job.setPartitionerClass(DatePartitioner.class);
 
-/*
 
-        HBaseClient client = new HBaseClient();
+
+        /*HBaseClient client = new HBaseClient();
         if(!client.exists("query1"))
             client.createTable("query1","RATING","RATING_NUMBER");
 */
@@ -264,7 +263,11 @@ public class Query1 {
         TableMapReduceUtil.initTableReducerJob(
                 "query1",        // output table
                 TableReduce.class,    // reducer class
-                job);
+                job,
+                null);
+        job.setNumReduceTasks(1);
+        job.setPartitionerClass(DatePartitioner.class);
+
         try {
             boolean b = job.waitForCompletion(true);
 
