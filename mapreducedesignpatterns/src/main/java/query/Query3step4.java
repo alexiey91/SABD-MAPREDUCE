@@ -3,6 +3,11 @@ package query;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
+import org.apache.hadoop.hbase.mapreduce.TableMapReduceUtil;
+import org.apache.hadoop.hbase.mapreduce.TableReducer;
+import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
@@ -25,15 +30,7 @@ import static java.lang.StrictMath.max;
  */
 public class Query3step4 {
 
-    public static class FinalOrderingMapper extends Mapper<Object, Text, IntWritable, Text> {
 
-        public void map(Object key, Text value, Context context)
-                throws IOException, InterruptedException {
-            //il contatore della chiave k = contatore[50-k], k compr [0,50]
-
-        }
-
-    }
 
     public static class LastMapper extends Mapper<Object, Text, IntWritable, Text>{
         private IntWritable outkey = new IntWritable();
@@ -285,12 +282,33 @@ public class Query3step4 {
             }
         }
     }*/
-    public static class FinalOrderingReducer extends Reducer<IntWritable, Text, Text, NullWritable> {
+    /*public static class FinalOrderingReducer extends Reducer<IntWritable, Text, Text, NullWritable> {
 
         public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
 
             for (Text t : values) {
                 context.write(new Text(key.toString()+":::"+t.toString()), NullWritable.get());
+            }
+
+        }
+
+    }*/
+    public static class FinalOrderingReducer extends TableReducer<IntWritable, Text, ImmutableBytesWritable> {
+
+        public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+
+            for (Text t : values) {
+                String[] splt = t.toString().split(":");
+                String title= splt[1];
+                for(int j=0;j<splt.length-1;j++){
+                    title+=splt[j];
+                }
+                Put put = new Put(Bytes.toBytes(title));
+                put.addColumn(Bytes.toBytes("Title"), Bytes.toBytes("id"), Bytes.toBytes(splt[0]));
+               // put.addColumn(Bytes.toBytes("Title"), Bytes.toBytes("name"), Bytes.toBytes(title));
+                put.addColumn(Bytes.toBytes("Ranking"), Bytes.toBytes("actual"), Bytes.toBytes(key.toString()));
+                put.addColumn(Bytes.toBytes("Ranking"), Bytes.toBytes("previous"), Bytes.toBytes(splt[splt.length-1]));
+                //context.write(new Text(key.toString()+":::"+t.toString()), NullWritable.get());
             }
 
         }
@@ -454,9 +472,9 @@ public class Query3step4 {
                     lastJob.setMapOutputValueClass(Text.class);
                     lastJob.setReducerClass(FinalOrderingReducer.class);
                     lastJob.setNumReduceTasks(1);
-                    lastJob.setOutputKeyClass(Text.class);
+                   /* lastJob.setOutputKeyClass(Text.class);
                     lastJob.setOutputValueClass(NullWritable.class);
-
+*/
                     lastJob.setPartitionerClass(FinalPartitioner.class);
 
 
@@ -464,10 +482,22 @@ public class Query3step4 {
 
                     lastJob.setInputFormatClass(SequenceFileInputFormat.class);
                     SequenceFileInputFormat.setInputPaths(lastJob, oldPositioning);
-                    TextOutputFormat.setOutputPath(lastJob, finalResult);
+                   // TextOutputFormat.setOutputPath(lastJob, finalResult);
                     /*lastJob.setOutputFormatClass(SequenceFileOutputFormat.class);
                     SequenceFileOutputFormat.setOutputPath(lastJob, finalPositioning);
-*/                  code = lastJob.waitForCompletion(true) ? 0 : 4;
+*/
+                    TableMapReduceUtil.initTableReducerJob(
+                            "query3",        // output table
+                            FinalOrderingReducer.class,    // reducer class
+                            lastJob);
+                    try {
+                        code = lastJob.waitForCompletion(true) ? 0 : 4;
+
+                    }catch (IOException e){
+                        System.out.print("errore"+e);
+
+                    }
+                    //code = lastJob.waitForCompletion(true) ? 0 : 4;
                 }
             }
 
