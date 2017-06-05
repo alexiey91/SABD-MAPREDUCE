@@ -18,6 +18,7 @@ import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import util.FilmRating;
+import util.HBaseClient;
 
 import java.io.IOException;
 import java.util.Calendar;
@@ -75,7 +76,8 @@ public class Query3step4 {
             String outValue= ar[0];
             for(int k=1;k<ar.length-2;k++)
                 outValue+=":"+ar[k];
-            outValue+=" --oldPosition:"+pos;
+            //outValue+=" --oldPosition:"+pos;
+            outValue+=":"+pos;
             context.getCounter("SINGLE_COUNT", "" + (50 - Integer.parseInt(nRt))).increment(1);
 
             context.write(outkey,new Text(outValue));
@@ -296,18 +298,21 @@ public class Query3step4 {
     public static class FinalOrderingReducer extends TableReducer<IntWritable, Text, ImmutableBytesWritable> {
 
         public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-
+            //2607::Get Real (1998)
             for (Text t : values) {
                 String[] splt = t.toString().split(":");
-                String title= splt[1];
-                for(int j=0;j<splt.length-1;j++){
-                    title+=splt[j];
+                String title= splt[2];
+                for(int j=3;j<splt.length-2;j++){
+                    title+=":"+splt[j];
                 }
-                Put put = new Put(Bytes.toBytes(title));
+                int delta=Integer.parseInt(splt[splt.length-1])-key.get();
+                Put put = new Put(Bytes.toBytes(key.get()+""));
                 put.addColumn(Bytes.toBytes("Title"), Bytes.toBytes("id"), Bytes.toBytes(splt[0]));
-               // put.addColumn(Bytes.toBytes("Title"), Bytes.toBytes("name"), Bytes.toBytes(title));
-                put.addColumn(Bytes.toBytes("Ranking"), Bytes.toBytes("actual"), Bytes.toBytes(key.toString()));
+                put.addColumn(Bytes.toBytes("Title"), Bytes.toBytes("name"), Bytes.toBytes(title));
+                //put.addColumn(Bytes.toBytes("Ranking"), Bytes.toBytes("actual"), Bytes.toBytes(key.toString()));
                 put.addColumn(Bytes.toBytes("Ranking"), Bytes.toBytes("previous"), Bytes.toBytes(splt[splt.length-1]));
+                put.addColumn(Bytes.toBytes("Ranking"), Bytes.toBytes("delta"), Bytes.toBytes(delta+""));
+                context.write(null,put);
                 //context.write(new Text(key.toString()+":::"+t.toString()), NullWritable.get());
             }
 
@@ -361,7 +366,9 @@ public class Query3step4 {
         MultipleInputs.addInputPath(job, new Path(args[1]), TextInputFormat.class, FilmMapper.class);
         job.setOutputFormatClass(SequenceFileOutputFormat.class);
         SequenceFileOutputFormat.setOutputPath(job, unionStage);
-
+       /* HBaseClient client = new HBaseClient();
+        if(!client.exists("query3"))
+            client.createTable("query3","Title","Ranking");*/
 
         int code = job.waitForCompletion(true) ? 0 : 1;
 
@@ -470,7 +477,7 @@ public class Query3step4 {
                     lastJob.setMapperClass(LastMapper.class);
                     lastJob.setMapOutputKeyClass(IntWritable.class);
                     lastJob.setMapOutputValueClass(Text.class);
-                    lastJob.setReducerClass(FinalOrderingReducer.class);
+                    //lastJob.setReducerClass(FinalOrderingReducer.class);
                     lastJob.setNumReduceTasks(1);
                    /* lastJob.setOutputKeyClass(Text.class);
                     lastJob.setOutputValueClass(NullWritable.class);
