@@ -16,10 +16,7 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.Mapper;
-import org.apache.hadoop.mapreduce.Partitioner;
-import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.*;
 import org.apache.hadoop.mapreduce.lib.input.MultipleInputs;
 import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
@@ -30,6 +27,7 @@ import org.apache.hadoop.mapreduce.lib.partition.InputSampler;
 import org.apache.hadoop.mapreduce.lib.partition.TotalOrderPartitioner;
 import util.Categories;
 import util.Films;
+import util.HBaseClient;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -122,9 +120,11 @@ public class Query2 {
         @Override
         public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
 
+
+
             String line = value.toString();
 
-            System.out.println("2MAP:"+ line);
+           // System.out.println("2MAP:"+ line);
             String[] parts = line.split(":");
 
             switch(key.toString()) {
@@ -194,7 +194,8 @@ public class Query2 {
 
             //outKey.set((int) Double.parseDouble(parts[0]));
             outValue.set(key.toString()+":"+line);
-            System.out.println("outKey scelta= "+outKey+"->"+key.toString());
+          //  System.out.println("outKey scelta= "+outKey+"->"+key.toString());
+
             context.write(outKey, outValue);
 
         }
@@ -339,17 +340,17 @@ public class Query2 {
                 String[] s = t.toString().split(":");
                 categories.setGenres(s[0]);
 
-                System.out.println("S-REDUCER:"+s[0]+":"+s[1]+":"+s[2]+":"+s[3]);
+               // System.out.println("S-REDUCER:"+s[0]+":"+s[1]+":"+s[2]+":"+s[3]);
                 categories.addRatingMod(Double.parseDouble(s[1]),Double.parseDouble(s[2]),Double.parseDouble(s[3]));
                 //bisogna fare una media pesata incrementale
 
             }
-            System.out.println("S-REDUCER:"+categories.getGenres()+":"+categories.getRating()+":"+categories.getRatingVar());
+          //  System.out.println("S-REDUCER:"+categories.getGenres()+":"+categories.getRating()+":"+categories.getRatingVar());
             /* Serialize topic */
             // String serializedTopic = gson.toJson(categories);
             Put put = new Put(Bytes.toBytes(categories.getGenres()));
             put.addColumn(Bytes.toBytes("Average"), Bytes.toBytes("count"), Bytes.toBytes(categories.getRating().toString()));
-            System.out.println("Dopo addColumn Average");
+          //  System.out.println("Dopo addColumn Average");
             put.addColumn(Bytes.toBytes("Variance"), Bytes.toBytes("count"), Bytes.toBytes(categories.getRatingVar().toString()));
             context.write(null,  put);
             /*context.write(new Text(categories.getGenres()+":[AVG:"
@@ -451,10 +452,15 @@ public class Query2 {
 
     public static void main(String[] args) throws Exception {
 
+
         /* **** Job #1: Analyze phase **** */
 
         /* Create and configure a new MapReduce Job */
         Configuration conf = HBaseConfiguration.create();
+        /*conf.set("fs.defaultFS", "hdfs://127.0.0.1:9000");
+        conf.set("mapreduce.jobtracker.address", "alessandro-lenovo-g500:54311");
+        conf.set("mapreduce.framework.name", "yarn");
+        conf.set("yarn.resourcemanager.address", "alessandro-lenovo-g500:8032");*/
         Path partitionFile = new Path(args[2] + "_partitions.lst");
         Path outputStage = new Path(args[2] + "_staging");
         Path outputOrder = new Path(args[2]);
@@ -482,9 +488,13 @@ public class Query2 {
         job.setMapOutputKeyClass(IntWritable.class);
         job.setOutputFormatClass(SequenceFileOutputFormat.class);
         SequenceFileOutputFormat.setOutputPath(job, outputStage);
-
+        long startJob = System.currentTimeMillis();
         /* Submit the job and get completion code. */
         int code = job.waitForCompletion(true) ? 0 : 1;
+
+        long finishJob =System.currentTimeMillis()-startJob;
+        System.out.println("Tempo di esecuzione Query2 1°MapReduce: "+finishJob+" ms");
+
         /* ********************************************************* */
         if (code == 0) {
 
@@ -503,10 +513,9 @@ public class Query2 {
 
           /*     orderJob.setOutputKeyClass(Text.class);
             orderJob.setOutputValueClass(Text.class);*/
-        /*HBaseClient client = new HBaseClient();
+        HBaseClient client = new HBaseClient();
         if(!client.exists("query2"))
             client.createTable("query2","Average","Variance");
-*/
 
             TableMapReduceUtil.initTableReducerJob(
                     "query2",        // output table
@@ -516,7 +525,19 @@ public class Query2 {
 
 
             try {
+                long StartQuery2 = System.currentTimeMillis();
+
                 boolean b = orderJob.waitForCompletion(true);
+
+                long FinishQuery2= System.currentTimeMillis()-StartQuery2;
+                System.out.println("Tempo esecuzione Query2 2°Map Reduce= "+FinishQuery2+" ms");
+
+               /* System.out.println("Counters" + job.getCounters().findCounter("org.apache.hadoop.mapreduce.JobCounter","MILLIS_MAPS").getValue());
+                System.out.println("Counters" + job.getCounters().findCounter("org.apache.hadoop.mapreduce.JobCounter","MILLIS_REDUCES").getValue());
+                System.out.println("Counters" + JobCounter.MILLIS_MAPS);
+                System.out.println("Counters: FInish TIME: " + job.getFinishTime());
+                System.out.println("Counters: History TIME: " + job.getHistoryUrl());
+                System.out.println("Counters: Start TIME: " + job.getStartTime());*/
 
             }catch (IOException e){
                 System.out.print("errore"+e);

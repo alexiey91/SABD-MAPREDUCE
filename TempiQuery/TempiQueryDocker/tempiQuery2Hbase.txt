@@ -1,0 +1,3 @@
+Tempo di esecuzione Query2 1?MapReduce: 105806 ms
+HBase is running!
+Tempo esecuzione Query2 2?Map Reduce= 13339 ms

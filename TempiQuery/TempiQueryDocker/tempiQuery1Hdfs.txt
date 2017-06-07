@@ -1,0 +1,1 @@
+Tempo di esecuzione Query1 (HDFS): 122210 ms

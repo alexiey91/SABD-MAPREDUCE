@@ -1,0 +1,5 @@
+Tempo di esecuzione Query3 1?Map Reduce: 58052 ms
+Tempo di esecuzione Query3 2?MapReduce: 21893 ms
+Tempo di esecuzione Query3 3?MapReduce: 18775 ms
+Countersorg.apache.hadoop.mapreduce.counters.GenericCounter@daf1db5f
+Tempo esecuzione Query3 4?MapReduce24854 ms

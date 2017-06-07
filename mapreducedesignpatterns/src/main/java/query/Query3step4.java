@@ -193,8 +193,8 @@ public class Query3step4 {
             Double d = Math.floor(films.getRatingAvgPrev() * 10);
             //System.out.print("KEY"+d.toString().split(Pattern.quote("."))[0]);
             String[] array = d.toString().split(Pattern.quote("."));
-            if (films.getRatingNumberLast() > 5.0) {
-                if (films.getRatingNumberPrev() > 5.0)
+            if (films.getRatingNumberLast() > 15.0) {
+                if (films.getRatingNumberPrev() > 15.0)
                     context.write(new Text(array[0]), new Text(films.getTitle() + ":" + films.getRatingAvgLast()));
                 else
                     context.write(new Text("0"), new Text(films.getTitle() + ":" + films.getRatingAvgLast()));
@@ -343,6 +343,12 @@ public class Query3step4 {
     public static void main(String[] args) throws Exception {
 
         Configuration conf = new Configuration();
+
+      /*  conf.set("fs.defaultFS", "hdfs://127.0.0.1:9000");
+        conf.set("mapreduce.jobtracker.address", "alessandro-lenovo-g500:54311");
+        conf.set("mapreduce.framework.name", "yarn");
+        conf.set("yarn.resourcemanager.address", "alessandro-lenovo-g500:8032");*/
+
         Job job = Job.getInstance(conf, "Query3step4");
         job.setJarByClass(Query3step4.class);
         Path unionStage = new Path(args[2] + "_union");
@@ -369,8 +375,10 @@ public class Query3step4 {
        /* HBaseClient client = new HBaseClient();
         if(!client.exists("query3"))
             client.createTable("query3","Title","Ranking");*/
-
+        long startJob= System.currentTimeMillis();
         int code = job.waitForCompletion(true) ? 0 : 1;
+        long finishJob =System.currentTimeMillis()-startJob;
+        System.out.println("Tempo di esecuzione Query3 1°Map Reduce: "+finishJob+" ms");
 
         /*FileUtil.copyMerge(FileSystem.get(new Configuration()),unionStage,
                 FileSystem.get(new Configuration()),new Path(unionStage+""),true,conf,"");
@@ -408,7 +416,10 @@ public class Query3step4 {
             SequenceFileOutputFormat.setOutputPath(orderJob, preOldPositioning);*/
 
         /* Submit the job and get completion code. */
+            long startJob2= System.currentTimeMillis();
             code = orderJob.waitForCompletion(true) ? 0 : 2;
+            long finishJob2 =System.currentTimeMillis()-startJob2;
+            System.out.println("Tempo di esecuzione Query3 2°MapReduce: "+finishJob2+" ms");
 
 
             Counters cs = orderJob.getCounters();
@@ -451,8 +462,12 @@ public class Query3step4 {
                 //TextOutputFormat.setOutputPath(positioningJob, oldPositioning);
                 positioningJob.setOutputFormatClass(SequenceFileOutputFormat.class);
                 SequenceFileOutputFormat.setOutputPath(positioningJob, oldPositioning);
-
+                long startJob3 = System.currentTimeMillis();
                 code = positioningJob.waitForCompletion(true) ? 0 : 3;
+
+                long finishJob3 =System.currentTimeMillis()-startJob3;
+                System.out.println("Tempo di esecuzione Query3 3°MapReduce: "+finishJob3+" ms");
+
 
                 Job lastJob = Job.getInstance(conf, "Query3step4");
                 cs = positioningJob.getCounters();
@@ -498,7 +513,12 @@ public class Query3step4 {
                             FinalOrderingReducer.class,    // reducer class
                             lastJob);
                     try {
+                        long StartQuery3=System.currentTimeMillis();
                         code = lastJob.waitForCompletion(true) ? 0 : 4;
+                        System.out.println("Counters"+ lastJob.getCounters().findCounter("Job Counters","Total time spent by all reduce tasks (ms)"));
+
+                        long FinishQuery3= System.currentTimeMillis()-StartQuery3;
+                        System.out.println("Tempo esecuzione Query3 4°MapReduce"+ FinishQuery3+" ms");
 
                     }catch (IOException e){
                         System.out.print("errore"+e);
