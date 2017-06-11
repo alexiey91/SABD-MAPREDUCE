@@ -1,0 +1,3 @@
+Tempo di esecuzione Query2 (HDFS) 1 mapreduce: 144830 ms
+Tempo di esecuzione Query2 (HDFS) 2 mapreduce: 24706 ms
+Tempo esecuzione Query2 (Hdfs) totale 169536 ms -> 2m 49,54 s
