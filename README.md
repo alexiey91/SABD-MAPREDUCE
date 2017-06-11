@@ -24,12 +24,12 @@ studenti, si vedano le indicazioni specifiche.
 Le query a cui rispondere sono:
 1. Individuare i film con una valutazione maggiore o uguale a 4.0 e valutati a partire dal 1 Gennaio 2000.
 2. Calcolare la valutazione media e la sua deviazione standard per ciascun genere di film.
-3. Trovare i 10 film che hanno ottenuto la piu alta valutazione nell’ultimo anno del dataset (dal 1 Aprile `
+3. Trovare i 10 film che hanno ottenuto la piu alta valutazione nell’ultimo anno del dataset (dal 1 Aprile 
 2014 al 31 Marzo 2015) e confrontare, laddove possibile, la loro posizione nella classifica rispetto a
 quella conseguita nell’anno precedente (dal 1 Aprile 2013 al 31 Marzo 2014).
 Si chiede inoltre di valutare sperimentalmente i tempi di processamento delle 3 query sulla piattaforma
-di riferimento usata per la realizzazione del progetto. Tale piattaforma puo essere un nodo standalone oppure `
-in alternativa e possibile utilizzare un servizio Cloud per Hadoop (ad es. Amazon EMR o Google Dataproc), `
+di riferimento usata per la realizzazione del progetto. Tale piattaforma puo essere un nodo standalone oppure 
+in alternativa e possibile utilizzare un servizio Cloud per Hadoop (ad es. Amazon EMR o Google Dataproc), 
 utilizzando i rispettivi grant a disposizione.
 Infine, si chiede di realizzare la fase di data ingestion per:
 • importare i dati di input in HDFS, eventualmente trasformando la rappresentazione dei dati in un altro
