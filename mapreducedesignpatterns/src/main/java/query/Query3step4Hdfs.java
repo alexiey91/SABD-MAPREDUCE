@@ -33,6 +33,17 @@ public class Query3step4Hdfs {
 
 
     public static class LastMapper extends Mapper<Object, Text, IntWritable, Text>{
+
+        /**
+         * Il quarto mapper recupera i valori del contatore relativo al gruppo di film con
+         * rating dell'ultimo anno maggiore di 1 rispetto al rating corrente:
+         * se il film ha rating k controlla il valore di count_cumulative[k-1] ossia il minimo
+         * numero di film che lo precedono.
+         * Preso quel valore lo si somma alla posizione locale,
+         * ossia quella all'interno del gruppo di film con la stessa votazione.
+         * Out <position,id:title:oldPosition>
+         **/
+
         private IntWritable outkey = new IntWritable();
 
         public void map(Object key, Text value, Context context)
@@ -58,6 +69,17 @@ public class Query3step4Hdfs {
         }
     }
     public static class PostOldMapper extends Mapper<Object, Text, IntWritable, Text>{
+        /**
+         * Il terzo mapper recupera i valori del contatore relativo al gruppo di film con
+         * rating dell'anno precedente maggiore di 1 rispetto al rating corrente:
+         * se il film ha rating k controlla il valore di count_cumulative[k-1] ossia il minimo
+         * numero di film che lo precedono.
+         * Preso quel valore lo si somma alla posizione locale,
+         * ossia quella all'interno del gruppo di film con la stessa votazione.
+         * Out <newRate,id:title:oldPosition>
+         **/
+
+
         private IntWritable outkey = new IntWritable();
 
         public void map(Object key, Text value, Context context)
@@ -75,18 +97,20 @@ public class Query3step4Hdfs {
             String outValue= ar[0];
             for(int k=1;k<ar.length-2;k++)
                 outValue+=":"+ar[k];
-            //outValue+=" --oldPosition:"+pos;
             outValue+=":"+pos;
             context.getCounter("SINGLE_COUNT", "" + (50 - Integer.parseInt(nRt))).increment(1);
 
             context.write(outkey,new Text(outValue));
 
-            //context.write(outkey,new Text(value.toString()+"-oldPosition:"+pos));
         }
     }
 
     public static class PreOldMapper extends Mapper<Object, Text, IntWritable, Text> {
-
+        /**
+         * Il secondo mapper ha il compito di aumentare il contatore relativo al rating del film analizzato
+         * Se il film ha rating k che è si aumenterà il contatore[50-k]
+         * Out <oldRate,id:Title>
+         * **/
         private IntWritable outkey = new IntWritable();
 
         public void map(Object key, Text value, Context context)
@@ -101,7 +125,11 @@ public class Query3step4Hdfs {
     }
 
     public static abstract class GenericHierarchyMapper extends Mapper<Object, Text, IntWritable, Text> {
-
+        /**
+         *  Il primo mapper ha il compito di prelevare ed etichettare i film ed i rating.
+         *  I rating avranno un header R:L/R:P, dove L sta per LAST e P per PREV (ultimo anno o quello precedente)
+         *  In uscita avremo <idFilm,F:Titolo> oppure <idFilm,R:P:Rating>||<idFilm,R:L:Rating>
+         *  **/
         private IntWritable outKey = new IntWritable();
         private Text outValue = new Text();
         private final String valuePrefix;
@@ -162,9 +190,14 @@ public class Query3step4Hdfs {
     }
 
     public static class UnionReducer extends
-            //Reducer<IntWritable, Text, Text, NullWritable> {
             Reducer<IntWritable, Text, Text, Text> {
-
+        /** Questo primo reducer ha il compito di associare i ranking (con header R) ai film (con header F).
+         *  I rating hanno un header R:L/R:P, dove L sta per LAST e P per PREV (ultimo anno o quello precedente)
+         *
+         *  Ogni nuovo rating comporta l'aggiornamento della media dei ranking dell'anno corrispondente.
+         *  In uscita <oldRating,idFilm:title:lastRanking>
+         *
+         * **/
         public enum ValueType {RATING, FILM, UNKNOWN, PREV, LAST}
         //private Gson gson = new Gson();
 
@@ -262,24 +295,7 @@ public class Query3step4Hdfs {
             }
         }
     }
-    /*public static class LastPositionReducer extends Reducer<IntWritable, Text, Text, Text> {
 
-        public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-            int pos;
-
-            for (Text t : values) {
-                String[] ar= t.toString().split(":");
-                pos = Integer.parseInt(ar[ar.length - 1]);
-                String outValue= ar[0];
-                for(int k=1;k<ar.length-2;k++)
-                    outValue+=":"+ar[k];
-
-                //context.write(new Text(key.toString()),t);
-                context.write(new Text(pos+""),new Text(outValue));
-                //context.write(new Text(outkey+""),t);
-            }
-        }
-    }*/
     public static class FinalOrderingReducer extends Reducer<IntWritable, Text, Text, Text> {
 
         public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
@@ -305,7 +321,6 @@ public class Query3step4Hdfs {
     public static class DatePartitioner extends Partitioner<IntWritable, Text> {
 
         public int getPartition(IntWritable key, Text value, int numPartitions) {
-            // System.out.println("PARTITIONER "+ key.get()+":"+(key.get()) % numPartitions);
             return (50 - key.get());
             /*la posizione è inversamente proporzionale alle stelle guadagnate
              5.0 stelle = 50 -> partition[0]
@@ -317,7 +332,6 @@ public class Query3step4Hdfs {
     public static class FinalPartitioner extends Partitioner<IntWritable, Text> {
 
         public int getPartition(IntWritable key, Text value, int numPartitions) {
-            //System.out.println("PARTITIONER "+ key.get()+":"+(key.get()-1) % numPartitions);
             return (key.get()-1)%numPartitions;
 
         }
@@ -331,7 +345,11 @@ public class Query3step4Hdfs {
         conf.set("mapreduce.jobtracker.address", "master:19888");
         conf.set("mapreduce.framework.name", "yarn");
         conf.set("yarn.resourcemanager.address", "localhost:8088");*/
-
+        /** Primo step:
+         *      Nella fase di map si generano le tuple lette dai due file di input
+         *          riguardanti i film, ed i rating degli stessi effettuati negli ultimi due anni.
+         *      Nella fase di reduce si associano le valutazioni dei film ai film stessi,
+         *          così è possibile farne la media delle valutazioni. **/
         Job job = Job.getInstance(conf, "Query3step4Hdfs");
         job.setJarByClass(Query3step4Hdfs.class);
         Path unionStage = new Path(args[2] + "_union");
@@ -359,13 +377,19 @@ public class Query3step4Hdfs {
         int code = job.waitForCompletion(true) ? 0 : 1;
         long finishJob =System.currentTimeMillis()-startJob;
         System.out.println("Tempo di esecuzione Query3 1°Map Reduce: "+finishJob+" ms");
-
+        /**
+         * Secondo step:
+         *  Nella fase di map si contano il numero di film a parità di rating.
+         *  Nella fase di reduce si aggiunge trail con la posizione locale all'interno
+         *      dello stesso gruppo di appartenenza (i gruppi sono divisi in base al valore
+         *      del vecchio rating)
+         * **/
         if (code == 0) {
+
             Job orderJob = Job.getInstance(conf, "Query3step4Hdfs");
 
             orderJob.setJarByClass(Query3step4Hdfs.class);
 
-        /* Map: samples data; Reduce: identity function */
             orderJob.setMapperClass(PreOldMapper.class);
             orderJob.setMapOutputKeyClass(IntWritable.class);
             orderJob.setMapOutputValueClass(Text.class);
@@ -376,7 +400,6 @@ public class Query3step4Hdfs {
 
             orderJob.setPartitionerClass(DatePartitioner.class);
 
-        /* Set input and output files */
 
             orderJob.setInputFormatClass(SequenceFileInputFormat.class);
             SequenceFileInputFormat.setInputPaths(orderJob, unionStage);
@@ -385,7 +408,6 @@ public class Query3step4Hdfs {
             SequenceFileOutputFormat.setOutputPath(orderJob, preOldPositioning);
 
 
-        /* Submit the job and get completion code. */
             long startJob2= System.currentTimeMillis();
             code = orderJob.waitForCompletion(true) ? 0 : 2;
             long finishJob2 =System.currentTimeMillis()-startJob2;
@@ -395,7 +417,6 @@ public class Query3step4Hdfs {
             Counters cs = orderJob.getCounters();
             for (int i = 0; i < 51; i++) {
                 Counter c = cs.findCounter("SINGLE_COUNT", "" + i);
-                //System.out.println("count[" + i + "]:" + c.getDisplayName() + ":" + c.getName() + ":" + c.getValue());
             }
             Job positioningJob = Job.getInstance(conf, "Query3step4Hdfs");
 
