@@ -11,6 +11,7 @@ import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapred.JobTracker;
 import org.apache.hadoop.mapreduce.*;
 import org.apache.hadoop.mapreduce.lib.input.MultipleInputs;
 import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
@@ -27,7 +28,10 @@ import java.util.regex.Pattern;
 import static java.lang.StrictMath.max;
 
 /**
- * Created by alessandro on 26/05/2017.
+ *  La richiesta della query 3 consiste nel trovare i primi 10 film valutati nell'ultimo anno del dataset
+ *  e valutarne la differenza rispetto alla posizione relativa all'anno precedente.
+ *
+ *  La differenza con la classe Query3step4Hdfs risiede nel salvare i dati su HBASE invece che su HDFS.
  */
 public class Query3step4 {
 
@@ -45,7 +49,7 @@ public class Query3step4 {
             String[] ar= value.toString().split(":");
             pos += Long.parseLong(ar[ar.length-1]);
             outkey.set((int)pos);
-           // outkey.set(Integer.valueOf(key.toString()));
+
             if(pos<=(long)10) {
                 String outValue = ar[0];
                 for (int k = 1; k < ar.length - 1; k++)
@@ -54,8 +58,6 @@ public class Query3step4 {
                 context.write(outkey, new Text(outValue));
             }
 
-            //new value è del tipo id:titolo:vecchia posizione:posizione corrente
-           // context.write(outkey,new Text(outValue+":Position:"+pos));
         }
     }
     public static class PostOldMapper extends Mapper<Object, Text, IntWritable, Text>{
@@ -67,7 +69,6 @@ public class Query3step4 {
             //pos corrisponde al numero totale di film con rating superiore a key
             long pos = max(0,context.getConfiguration().getLong(""+(49-Integer.valueOf(key.toString())),0));
 
-            //outkey.set(Integer.valueOf(key.toString()));
             String[] ar= value.toString().split(":");
             pos += Long.parseLong(ar[ar.length-1]);
             Double newRate = Math.floor(Double.parseDouble(ar[ar.length-2])*10);
@@ -76,16 +77,12 @@ public class Query3step4 {
             String outValue= ar[0];
             for(int k=1;k<ar.length-2;k++)
                 outValue+=":"+ar[k];
-            //outValue+=" --oldPosition:"+pos;
+
             outValue+=":"+pos;
             context.getCounter("SINGLE_COUNT", "" + (50 - Integer.parseInt(nRt))).increment(1);
 
             context.write(outkey,new Text(outValue));
 
-
-            //System.out.println(key.toString()+"+++-----------------POS----------------:"+pos);
-
-            //context.write(outkey,new Text(value.toString()+"-oldPosition:"+pos));
         }
     }
 
@@ -191,7 +188,7 @@ public class Query3step4 {
 
             }
             Double d = Math.floor(films.getRatingAvgPrev() * 10);
-            //System.out.print("KEY"+d.toString().split(Pattern.quote("."))[0]);
+
             String[] array = d.toString().split(Pattern.quote("."));
             if (films.getRatingNumberLast() > 15.0) {
                 if (films.getRatingNumberPrev() > 15.0)
@@ -243,11 +240,11 @@ public class Query3step4 {
     public static class OrderingPhaseReducer extends Reducer<IntWritable, Text, Text, Text> {
 
         public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-            // System.out.println("KEY REDUCER"+key.toString());
+
             long count = 0;
 
             for (Text t : values) {
-                //context.write(new Text(key.toString()),t);
+
                 count++;
                 context.write(new Text(key.toString()), new Text(t + ":" + count));
             }
@@ -256,49 +253,21 @@ public class Query3step4 {
     public static class PostOrderingReducer extends Reducer<IntWritable, Text, Text, Text> {
 
         public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-            // System.out.println("KEY REDUCER"+key.toString());
+
             long count = 0;
 
             for (Text t : values) {
                 count++;
-                //context.write(new Text(key.toString()),t);
+
                 context.write(new Text(key.toString()), new Text(t.toString() + ":" + count));
             }
         }
     }
-    /*public static class LastPositionReducer extends Reducer<IntWritable, Text, Text, Text> {
 
-        public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-            int pos;
-
-            for (Text t : values) {
-                String[] ar= t.toString().split(":");
-                pos = Integer.parseInt(ar[ar.length - 1]);
-                String outValue= ar[0];
-                for(int k=1;k<ar.length-2;k++)
-                    outValue+=":"+ar[k];
-
-                //context.write(new Text(key.toString()),t);
-                context.write(new Text(pos+""),new Text(outValue));
-                //context.write(new Text(outkey+""),t);
-            }
-        }
-    }*/
-    /*public static class FinalOrderingReducer extends Reducer<IntWritable, Text, Text, NullWritable> {
-
-        public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-
-            for (Text t : values) {
-                context.write(new Text(key.toString()+":::"+t.toString()), NullWritable.get());
-            }
-
-        }
-
-    }*/
     public static class FinalOrderingReducer extends TableReducer<IntWritable, Text, ImmutableBytesWritable> {
 
         public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-            //2607::Get Real (1998)
+
             for (Text t : values) {
                 String[] splt = t.toString().split(":");
                 String title= splt[2];
@@ -313,7 +282,7 @@ public class Query3step4 {
                 put.addColumn(Bytes.toBytes("Ranking"), Bytes.toBytes("previous"), Bytes.toBytes(splt[splt.length-1]));
                 put.addColumn(Bytes.toBytes("Ranking"), Bytes.toBytes("delta"), Bytes.toBytes(delta+""));
                 context.write(null,put);
-                //context.write(new Text(key.toString()+":::"+t.toString()), NullWritable.get());
+
             }
 
         }
@@ -322,13 +291,13 @@ public class Query3step4 {
     public static class DatePartitioner extends Partitioner<IntWritable, Text> {
 
         public int getPartition(IntWritable key, Text value, int numPartitions) {
-            // System.out.println("PARTITIONER "+ key.get()+":"+(key.get()) % numPartitions);
+
             return (50 - key.get());
-            /*la posizione è inversamente proporzionale alle stelle guadagnate
-             5.0 stelle = 50 -> partition[0]
-             4.9 stelle = 49 -> partition[1]
-             ...
-              */
+            /**la posizione è inversamente proporzionale alle stelle guadagnate
+             *  5.0 stelle = 50 -> partition[0]
+             *  4.9 stelle = 49 -> partition[1]
+             *  ...
+             **/
         }
     }
     public static class FinalPartitioner extends Partitioner<IntWritable, Text> {
@@ -343,18 +312,18 @@ public class Query3step4 {
     public static void main(String[] args) throws Exception {
 
         Configuration conf = new Configuration();
-
-      /*  conf.set("fs.defaultFS", "hdfs://127.0.0.1:9000");
-        conf.set("mapreduce.jobtracker.address", "alessandro-lenovo-g500:54311");
+       /* conf.set("fs.defaultFS", "hdfs://127.0.0.1:50070");
+        conf.set("fs.defaultFS", "hdfs://master:54310");
+        conf.set("mapreduce.jobtracker.address", "master:19888");
         conf.set("mapreduce.framework.name", "yarn");
-        conf.set("yarn.resourcemanager.address", "alessandro-lenovo-g500:8032");*/
-
+        conf.set("yarn.resourcemanager.address", "localhost:8088");
+        */
         Job job = Job.getInstance(conf, "Query3step4");
         job.setJarByClass(Query3step4.class);
         Path unionStage = new Path(args[2] + "_union");
         Path preOldPositioning = new Path(args[2] + "_preOldPositioning");
         Path oldPositioning = new Path(args[2]+"_oldPositioning");
-        //Path finalPositioning= new Path(args[2]+"_newPos");
+
         Path finalResult = new Path(args[2]);
 
 
@@ -380,17 +349,9 @@ public class Query3step4 {
         long finishJob =System.currentTimeMillis()-startJob;
         System.out.println("Tempo di esecuzione Query3 1°Map Reduce: "+finishJob+" ms");
 
-        /*FileUtil.copyMerge(FileSystem.get(new Configuration()),unionStage,
-                FileSystem.get(new Configuration()),new Path(unionStage+""),true,conf,"");
-*/
         if (code == 0) {
             Job orderJob = Job.getInstance(conf, "Query3step4");
-           /* cs.addGroup("SINGLE_COUNT","SINGLE_COUNT");
-            cs.addGroup("CUMULATIVE_COUNT","CUMULATIVE_COUNT");
-            for(int i=0;i<50;i++) {
-                cs.getGroup("SINGLE_COUNT").addCounter("" + i, "" + i, 0);
-                cs.getGroup("CUMULATIVE_COUNT").addCounter("" + i, "" + i, 0);
-            }*/
+
             orderJob.setJarByClass(Query3step4.class);
 
         /* Map: samples data; Reduce: identity function */
@@ -411,9 +372,7 @@ public class Query3step4 {
 
             orderJob.setOutputFormatClass(SequenceFileOutputFormat.class);
             SequenceFileOutputFormat.setOutputPath(orderJob, preOldPositioning);
-//             TextOutputFormat.setOutputPath(orderJob, preOldPositioning);
-         /*   orderJob.setOutputFormatClass(SequenceFileOutputFormat.class);
-            SequenceFileOutputFormat.setOutputPath(orderJob, preOldPositioning);*/
+
 
         /* Submit the job and get completion code. */
             long startJob2= System.currentTimeMillis();
@@ -425,7 +384,7 @@ public class Query3step4 {
             Counters cs = orderJob.getCounters();
             for (int i = 0; i < 51; i++) {
                 Counter c = cs.findCounter("SINGLE_COUNT", "" + i);
-                //System.out.println("count[" + i + "]:" + c.getDisplayName() + ":" + c.getName() + ":" + c.getValue());
+
             }
             Job positioningJob = Job.getInstance(conf, "Query3step4");
 
@@ -436,7 +395,6 @@ public class Query3step4 {
                 c.increment(cs.findCounter("SINGLE_COUNT", "" + (i - 1)).getValue());
                 positioningJob.getConfiguration().setLong(c.getName(), c.getValue());
 
-                //System.out.println("count[" + i + "]:" + c.getDisplayName() + ":" + c.getName() + ":" + c.getValue());
             }
                 /**terzo step*/
             if (code == 0) {
@@ -454,12 +412,9 @@ public class Query3step4 {
 
                 positioningJob.setPartitionerClass(DatePartitioner.class);
 
-                /* Set input and output files */
-                //positioningJob.getConfiguration().set("mapreduce.output.textoutputformat.separator", "");
-
                 positioningJob.setInputFormatClass(SequenceFileInputFormat.class);
                 SequenceFileInputFormat.setInputPaths(positioningJob, preOldPositioning);
-                //TextOutputFormat.setOutputPath(positioningJob, oldPositioning);
+
                 positioningJob.setOutputFormatClass(SequenceFileOutputFormat.class);
                 SequenceFileOutputFormat.setOutputPath(positioningJob, oldPositioning);
                 long startJob3 = System.currentTimeMillis();
@@ -475,12 +430,9 @@ public class Query3step4 {
                 for (int i = 1; i < 51; i++) {
 
                     Counter c = cs.findCounter("SINGLE_COUNT", "" + i);
-             //       System.out.println("count[" + i + "]:" + c.getDisplayName() + ":" + c.getName() + ":" + c.getValue());
-
                     c.increment(cs.findCounter("SINGLE_COUNT", "" + (i - 1)).getValue());
                     lastJob.getConfiguration().setLong(c.getName(), c.getValue());
 
-             //       System.out.println("*count[" + i + "]:" + c.getDisplayName() + ":" + c.getName() + ":" + c.getValue());
                 }
 
                 /**quarto step*/
@@ -492,11 +444,7 @@ public class Query3step4 {
                     lastJob.setMapperClass(LastMapper.class);
                     lastJob.setMapOutputKeyClass(IntWritable.class);
                     lastJob.setMapOutputValueClass(Text.class);
-                    //lastJob.setReducerClass(FinalOrderingReducer.class);
                     lastJob.setNumReduceTasks(1);
-                   /* lastJob.setOutputKeyClass(Text.class);
-                    lastJob.setOutputValueClass(NullWritable.class);
-*/
                     lastJob.setPartitionerClass(FinalPartitioner.class);
 
 
@@ -504,10 +452,7 @@ public class Query3step4 {
 
                     lastJob.setInputFormatClass(SequenceFileInputFormat.class);
                     SequenceFileInputFormat.setInputPaths(lastJob, oldPositioning);
-                   // TextOutputFormat.setOutputPath(lastJob, finalResult);
-                    /*lastJob.setOutputFormatClass(SequenceFileOutputFormat.class);
-                    SequenceFileOutputFormat.setOutputPath(lastJob, finalPositioning);
-*/
+
                     TableMapReduceUtil.initTableReducerJob(
                             "query3",        // output table
                             FinalOrderingReducer.class,    // reducer class
@@ -524,11 +469,8 @@ public class Query3step4 {
                         System.out.print("errore"+e);
 
                     }
-                    //code = lastJob.waitForCompletion(true) ? 0 : 4;
                 }
             }
-
-
         }
         /* Clean up the partition file and the staging directory */
 

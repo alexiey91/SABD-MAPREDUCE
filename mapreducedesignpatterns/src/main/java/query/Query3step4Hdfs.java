@@ -24,13 +24,11 @@ import java.util.Calendar;
 import java.util.regex.Pattern;
 
 import static java.lang.StrictMath.max;
-
 /**
- * Created by alessandro on 26/05/2017.
- */
-public class Query3step4Hdfs {
-
-
+ *  La richiesta della query 3 consiste nel trovare i primi 10 film valutati nell'ultimo anno del dataset
+ *  e valutarne la differenza rispetto alla posizione relativa all'anno precedente.
+ **/
+ public class Query3step4Hdfs {
 
     public static class LastMapper extends Mapper<Object, Text, IntWritable, Text>{
 
@@ -55,7 +53,7 @@ public class Query3step4Hdfs {
             String[] ar= value.toString().split(":");
             pos += Long.parseLong(ar[ar.length-1]);
             outkey.set((int)pos);
-           // outkey.set(Integer.valueOf(key.toString()));
+
             if(pos<=(long)10) {
                 String outValue = ar[0];
                 for (int k = 1; k < ar.length - 1; k++)
@@ -64,8 +62,6 @@ public class Query3step4Hdfs {
                 context.write(outkey, new Text(outValue));
             }
 
-            //new value è del tipo id:titolo:vecchia posizione:posizione corrente
-           // context.write(outkey,new Text(outValue+":Position:"+pos));
         }
     }
     public static class PostOldMapper extends Mapper<Object, Text, IntWritable, Text>{
@@ -88,7 +84,6 @@ public class Query3step4Hdfs {
             //pos corrisponde al numero totale di film con rating superiore a key
             long pos = max(0,context.getConfiguration().getLong(""+(49-Integer.valueOf(key.toString())),0));
 
-            //outkey.set(Integer.valueOf(key.toString()));
             String[] ar= value.toString().split(":");
             pos += Long.parseLong(ar[ar.length-1]);
             Double newRate = Math.floor(Double.parseDouble(ar[ar.length-2])*10);
@@ -127,8 +122,9 @@ public class Query3step4Hdfs {
     public static abstract class GenericHierarchyMapper extends Mapper<Object, Text, IntWritable, Text> {
         /**
          *  Il primo mapper ha il compito di prelevare ed etichettare i film ed i rating.
+         *  I film avranno un header F che sta per FILM
          *  I rating avranno un header R:L/R:P, dove L sta per LAST e P per PREV (ultimo anno o quello precedente)
-         *  In uscita avremo <idFilm,F:Titolo> oppure <idFilm,R:P:Rating>||<idFilm,R:L:Rating>
+         *  In uscita avremo <idFilm,F:Titolo> oppure <idFilm,R:Rating>||<idFilm,R:L:Rating>
          *  **/
         private IntWritable outKey = new IntWritable();
         private Text outValue = new Text();
@@ -199,7 +195,6 @@ public class Query3step4Hdfs {
          *
          * **/
         public enum ValueType {RATING, FILM, UNKNOWN, PREV, LAST}
-        //private Gson gson = new Gson();
 
         @Override
         public void reduce(IntWritable key, Iterable<Text> values, Context context)
@@ -220,7 +215,6 @@ public class Query3step4Hdfs {
 
             }
             Double d = Math.floor(films.getRatingAvgPrev() * 10);
-            //System.out.print("KEY"+d.toString().split(Pattern.quote("."))[0]);
             String[] array = d.toString().split(Pattern.quote("."));
             if (films.getRatingNumberLast() > 15.0) {
                 if (films.getRatingNumberPrev() > 15.0)
@@ -270,34 +264,36 @@ public class Query3step4Hdfs {
 
 
     public static class OrderingPhaseReducer extends Reducer<IntWritable, Text, Text, Text> {
-
+        /** Questo secondo reducer aggiunge un trailer con la posizione locale del film all'interno della
+         * stessa classe di film con lo stesso rating (relativo all'anno precedente) **/
         public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-            // System.out.println("KEY REDUCER"+key.toString());
+
             long count = 0;
 
             for (Text t : values) {
-                //context.write(new Text(key.toString()),t);
+
                 count++;
                 context.write(new Text(key.toString()), new Text(t + ":" + count));
             }
         }
     }
     public static class PostOrderingReducer extends Reducer<IntWritable, Text, Text, Text> {
-
+        /** Questo terzo reducer aggiunge un trailer con la posizione locale del film all'interno della
+         * stessa classe di film con lo stesso rating (relativo all'ultimo anno) **/
         public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-            // System.out.println("KEY REDUCER"+key.toString());
+
             long count = 0;
 
             for (Text t : values) {
                 count++;
-                //context.write(new Text(key.toString()),t);
+
                 context.write(new Text(key.toString()), new Text(t.toString() + ":" + count));
             }
         }
     }
 
     public static class FinalOrderingReducer extends Reducer<IntWritable, Text, Text, Text> {
-
+        /** Questo quarto reducer stampa su file **/
         public void reduce(IntWritable key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
 
             for (Text t : values) {
@@ -307,7 +303,7 @@ public class Query3step4Hdfs {
                     title+=":"+splt[j];
                 }
                 int delta=Integer.parseInt(splt[splt.length-1])-key.get();
-                //context.write(new Text(key.toString()+":"))
+
                 context.write(new Text(key.toString()), new Text("id:"+splt[0]+
                         "   title:"+title+
                         "   oldRanking:"+splt[splt.length-1]+
@@ -322,11 +318,11 @@ public class Query3step4Hdfs {
 
         public int getPartition(IntWritable key, Text value, int numPartitions) {
             return (50 - key.get());
-            /*la posizione è inversamente proporzionale alle stelle guadagnate
-             5.0 stelle = 50 -> partition[0]
-             4.9 stelle = 49 -> partition[1]
-             ...
-              */
+            /**la posizione è inversamente proporzionale alle stelle guadagnate
+             * 5.0 stelle = 50 -> partition[0]
+             * 4.9 stelle = 49 -> partition[1]
+             * ...
+             **/
         }
     }
     public static class FinalPartitioner extends Partitioner<IntWritable, Text> {
@@ -345,6 +341,7 @@ public class Query3step4Hdfs {
         conf.set("mapreduce.jobtracker.address", "master:19888");
         conf.set("mapreduce.framework.name", "yarn");
         conf.set("yarn.resourcemanager.address", "localhost:8088");*/
+
         /** Primo step:
          *      Nella fase di map si generano le tuple lette dai due file di input
          *          riguardanti i film, ed i rating degli stessi effettuati negli ultimi due anni.
@@ -359,7 +356,6 @@ public class Query3step4Hdfs {
 
 
         job.setMapOutputKeyClass(IntWritable.class);
-        /* Reduce function */
         job.setReducerClass(UnionReducer.class);
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(Text.class);
@@ -419,7 +415,10 @@ public class Query3step4Hdfs {
                 Counter c = cs.findCounter("SINGLE_COUNT", "" + i);
             }
             Job positioningJob = Job.getInstance(conf, "Query3step4Hdfs");
-
+            /** Si aggiornano i contatori presi nella fase di mapper con il loro valore cumulativo:
+             *  Alla fine del processo count[k] avrà il valore pari alla somma di tutti i film con
+             *  rating >=k
+             * **/
             positioningJob.getConfiguration().setLong("0", cs.findCounter("SINGLE_COUNT", "0").getValue());
             for (int i = 1; i < 51; i++) {
 
@@ -428,12 +427,14 @@ public class Query3step4Hdfs {
                 positioningJob.getConfiguration().setLong(c.getName(), c.getValue());
 
             }
-                /**terzo step*/
+            /**Nel terzo step si ordinano i film in base al rating relativo all'anno precedente.
+             * La posizione dell'anno precedente dipende dal rating del film e dall'ordine in cui
+             * il reducer riceve le tuple dal partitioner.
+             **/
             if (code == 0) {
 
                 positioningJob.setJarByClass(Query3step4Hdfs.class);
 
-                /* Map: samples data; Reduce: identity function */
                 positioningJob.setMapperClass(PostOldMapper.class);
                 positioningJob.setMapOutputKeyClass(IntWritable.class);
                 positioningJob.setMapOutputValueClass(Text.class);
@@ -468,12 +469,14 @@ public class Query3step4Hdfs {
 
                 }
 
-                /**quarto step*/
+                /**Nel quarto step si ordinano i film in base al rating relativo all'ultimo anno.
+                 * La posizione dell'ultimo anno dipende dal rating del film e dall'ordine in cui
+                 * il reducer riceve le tuple dal partitioner. Se ne prendono i primi 10.
+                 * **/
                 if (code == 0) {
 
                     lastJob.setJarByClass(Query3step4Hdfs.class);
 
-                    /* Map: samples data; Reduce: identity function */
                     lastJob.setMapperClass(LastMapper.class);
                     lastJob.setMapOutputKeyClass(IntWritable.class);
                     lastJob.setMapOutputValueClass(Text.class);
@@ -503,11 +506,8 @@ public class Query3step4Hdfs {
                         System.out.print("errore"+e);
 
                     }
-                    //code = lastJob.waitForCompletion(true) ? 0 : 4;
                 }
             }
-
-
         }
         /* Clean up the partition file and the staging directory */
 

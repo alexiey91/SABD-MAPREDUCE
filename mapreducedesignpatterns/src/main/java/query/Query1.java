@@ -1,6 +1,5 @@
 package query;
 
-import com.google.gson.Gson;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseConfiguration;
@@ -22,7 +21,11 @@ import java.util.Calendar;
 public class Query1 {
 
     public static abstract class GenericHierarchyMapper extends Mapper<Object, Text, IntWritable, Text> {
-
+        /**
+         *  Il mapper ha il compito di prelevare ed etichettare i film ed i rating.
+         *  I rating avranno un header R ed i film F
+         *  In uscita avremo <idFilm,F:Titolo> oppure <idFilm,R:Rating>
+         *  **/
         private IntWritable outKey = new IntWritable();
         private Text outValue = new Text();
         private final String valuePrefix;
@@ -80,60 +83,14 @@ public class Query1 {
         }
     }
 
-    public static class TopicHierarchyReducer extends
-            Reducer<IntWritable, Text, Text, Text> {
-
-        public enum ValueType { RATING, FILM , UNKNOWN}
-        private Gson gson = new Gson();
-
-        @Override
-        public void reduce(IntWritable key, Iterable<Text> values, Context context)
-                throws IOException, InterruptedException {
-
-            Films films = new Films();
-            for (Text t : values) {
-
-                String value = t.toString();
-                if (ValueType.FILM.equals(discriminate(value))){
-                    films.setTitle(key+":"+getContent(value));
-                } else if (ValueType.RATING.equals(discriminate(value))){
-                    films.addRating(Double.parseDouble(getContent(value)));
-                }
-
-            }
-
-            /* Serialize topic */
-            String serializedTopic = gson.toJson(films);
-            if(films.getRatingNumber() > (Double) 0.0 && films.getRating() > 4.0)
-                context.write(new Text(films.getTitle()), new Text("#rating:"+films.getRatingNumber()+";value:"+films.getRating().toString()));
-
-        }
-
-        private ValueType discriminate(String value){
-
-            char d = value.charAt(0);
-            switch (d){
-                case 'R':
-                    return ValueType.RATING;
-                case 'F':
-                    return ValueType.FILM;
-            }
-
-            return ValueType.UNKNOWN;
-        }
-
-        private String getContent(String value){
-            return value.substring(1);
-        }
-
-    }
 
     public static class TableReduce extends
             //Reducer<IntWritable, Text, Text, NullWritable> {
             TableReducer<IntWritable, Text, ImmutableBytesWritable> {
+        /**Il reducer calcola la media di ogni film; se la media è <= 4.0 viene scartato
+         * Salva i dati su Hbase**/
 
         public enum ValueType { RATING, FILM , UNKNOWN}
-        private Gson gson = new Gson();
 
         public void reduce(IntWritable key, Iterable<Text> values, Context context)
                 throws IOException, InterruptedException {
@@ -209,7 +166,6 @@ public class Query1 {
         if(!client.exists("query1"))
             client.createTable("query1","RATING","RATING_NUMBER");
 */
-        long StartReducer = System.currentTimeMillis();
 
         TableMapReduceUtil.initTableReducerJob(
                 "query1",        // output table
@@ -224,19 +180,6 @@ public class Query1 {
             boolean b = job.waitForCompletion(true);
             long finishJob =System.currentTimeMillis()-startJob;
             System.out.println("Tempo di esecuzione Query1: "+finishJob+" ms");
-
-          /*  for(CounterGroup group : job.getCounters()) {
-                for (Counter c : group){
-                    System.out.println("Counters" + c.getDisplayName() + c.getName() + c.getValue());
-                }
-            }
-            System.out.println("Counters" + job.getCounters().findCounter("org.apache.hadoop.mapreduce.JobCounter","MILLIS_MAPS").getValue());
-            System.out.println("Counters" + job.getCounters().findCounter("org.apache.hadoop.mapreduce.JobCounter","MILLIS_REDUCES").getValue());
-            System.out.println("Counters" + JobCounter.MILLIS_MAPS);
-            System.out.println("Counters: FInish TIME: " + job.getFinishTime());
-            System.out.println("Counters: History TIME: " + job.getHistoryUrl());
-            System.out.println("Counters: Start TIME: " + job.getStartTime());
-*/
 
 
         }catch (IOException e){

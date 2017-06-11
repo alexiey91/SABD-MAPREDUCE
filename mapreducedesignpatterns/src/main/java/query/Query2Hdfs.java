@@ -28,9 +28,19 @@ import util.HBaseClient;
 import java.io.IOException;
 import java.util.ArrayList;
 
+/**
+ * La richiesta della query2 consiste nel calcolare i valori di media e varianza per ogni genere di film
+ * presente nel dataset.
+ * **/
 public class Query2Hdfs {
 
     public static abstract class GenericHierarchyMapper extends Mapper<Object, Text, IntWritable, Text> {
+
+        /**
+         *  Il primo mapper ha il compito di prelevare ed etichettare i film ed i rating.
+         *  I rating avranno un header R ed i film F
+         *  In uscita avremo <idFilm,F:Titolo> oppure <idFilm,R:Rating>
+         *  **/
 
         private IntWritable outKey = new IntWritable();
         private Text outValue = new Text();
@@ -62,9 +72,8 @@ public class Query2Hdfs {
     }
 
 
-    //   Mapper Buono
     public static class SecondMapper extends Mapper<Object, Text, Text, Text> {
-
+        /**Il secondo mapper propaga in avanti le tuple**/
         private Text outKey = new Text();
         private Text outValue = new Text();
 
@@ -73,8 +82,6 @@ public class Query2Hdfs {
         public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
 
             String line = value.toString();
-
-            System.out.println("2MAP:" + key.toString());
 
             outKey.set(key.toString());
             outValue.set(line);
@@ -108,41 +115,40 @@ public class Query2Hdfs {
     public static class TopWaterfallReducer extends
             Reducer<IntWritable, Text, Text, Text> {
 
-        public enum ValueType {RATING, FILM, UNKNOWN}
-        // private Gson gson = new Gson();
+        /** Il primo reducer deve associare ad i film le valutazioni e farne la media e la varianza.
+         *  Una volta effettuate le stime deve creare tante tuple quante sono le categorie associate
+         *  al film. Questo viene fatto nei seguenti step:
+         * 1a    Se il messaggio viene dai film è necessario prelevare le categorie per
+         *       inserirle nell'arrayList categories.
+         * 1b    in Blob viene effettuata la media e la varianza di tutte le votazioni del film.
+         * 2     si completano, con i dati presi nella fase 1b, tutte le categorie immesse nella fase 1a nella lista
+        **/
 
-        /*
-        * 1a    Se il messaggio viene dai film è necessario prelevare le categorie per
-        *       inserirle in categories(arrayList).
-        * 1b    in Blob viene effettuata la media e la varianza di tutte le votazioni del film.
-        * 2     per ogni elemento di cui la categoria è stata immessa nel punto 1a si
-        *       si completano le info con i dati presi da 1b
-        * */
+        public enum ValueType {RATING, FILM, UNKNOWN}
+
         @Override
         public void reduce(IntWritable key, Iterable<Text> values, Context context)
                 throws IOException, InterruptedException {
 
             ArrayList<Categories> categories = new ArrayList<Categories>();
-            Categories blob = new Categories();//valori da aggiornare su ogni categoria
+            Categories blob = new Categories();
             for (Text t : values) {
                 String value = t.toString();
-                /* 1a */
+                /** 1a */
                 if (ValueType.FILM.equals(discriminate(value))) {
                     String[] cat = getContent(value).split("\\|");
-                    for (String j : cat)//prova ad aggiungere tutte le categorie prelevate dal film
+                    for (String j : cat)//aggiunge alla lista le categorie prelevate dal film
                         categories = Categories.addExclusive(categories, j, 0.0, 0.0, 0.0);
-                }/* 1b */ else if (ValueType.RATING.equals(discriminate(value))) {
+                }/** 1b */ else if (ValueType.RATING.equals(discriminate(value))) {
                     blob.addRating(Double.parseDouble(getContent(value)));
                 }
             }
-            // System.out.println("Reducer:#"+blob.getRatingNumber()+","+blob.getRating()+","+blob.getRatingVar());
-            /* 2 */
+
+            /** 2 */
             for (Categories c : categories)
                 categories = Categories.addExclusive(categories, c.getGenres(), blob.getRatingNumber(),
                         blob.getRating(), blob.getRatingVar());
 
-            /* Serialize topic */
-            //String serializedTopic = gson.toJson(categories);
             for (Categories c : categories) {
                 if (c.getRatingVar().isNaN() || c.getRatingVar() == 0.0)
                     context.write(new Text(c.getGenres()), new Text(c.getRatingNumber().toString() + ":" +
@@ -151,7 +157,7 @@ public class Query2Hdfs {
                     context.write(new Text(c.getGenres()), new Text(c.getRatingNumber().toString() + ":" +
                             c.getRating().toString() + ":" + c.getRatingVar().toString()));
             }
-            //System.out.println("Reducer:"+serializedTopic.toString());
+
 
         }
 
@@ -176,7 +182,8 @@ public class Query2Hdfs {
 
     public static class SecondReducer extends
             Reducer<Text, Text, Text, NullWritable> {
-
+        /** Il secondo reducer ha il compito di calcolare la media dei valori di media e varianza
+         *  presi dallo step precedente**/
 
         @Override
         public void reduce(Text key, Iterable<Text> values, Context context)
@@ -185,14 +192,9 @@ public class Query2Hdfs {
             categories.setGenres(key.toString());
 
             for (Text t : values) {
-                //n:avg:var
                 String[] s = t.toString().split(":");
-                //System.out.println("S-REDUCER:"+key.toString()+":"+s[0]+":"+s[1]+":"+s[2]);
                 categories.addRatingMod(Double.parseDouble(s[0]), Double.parseDouble(s[1]), Double.parseDouble(s[2]));
-                //bisogna fare una media pesata incrementale
-
             }
-
 
             context.write(new Text(categories.getGenres() + ":[AVG:"
                     + categories.getRating() + ",VAR:" + categories.getRatingVar() + "]"), NullWritable.get());
@@ -201,24 +203,20 @@ public class Query2Hdfs {
 
     public static void main(String[] args) throws Exception {
 
-         /*****Job #1:Analyze phase ****
-
-        Create and configure a new MapReduce Job*/
+         /**Job #1:Analyze phase**/
         Configuration conf = new Configuration();
-        Path partitionFile = new Path(args[2] + "_partitions.lst");
+        //Path partitionFile = new Path(args[2] + "_partitions.lst");
         Path outputStage = new Path(args[2] + "_staging");
         Path outputOrder = new Path(args[2]);
 
         Job job = Job.getInstance(conf, "Query2Hdfs");
         job.setJarByClass(Query2Hdfs.class);
 
-/*
-        Reduce function
-*/
+        job.setMapOutputKeyClass(IntWritable.class);
         job.setReducerClass(TopWaterfallReducer.class);
+        job.setNumReduceTasks(30);
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(Text.class);
-        job.setNumReduceTasks(30);
 
         job.setPartitionerClass(Query2Hdfs.DatePartitioner.class);
 
@@ -228,47 +226,34 @@ public class Query2Hdfs {
                 * arg[1] film*/
         MultipleInputs.addInputPath(job, new Path(args[0]), TextInputFormat.class, RatingMapper.class);
         MultipleInputs.addInputPath(job, new Path(args[1]), TextInputFormat.class, FilmMapper.class);
-        job.setMapOutputKeyClass(IntWritable.class);
         job.setOutputFormatClass(SequenceFileOutputFormat.class);
         SequenceFileOutputFormat.setOutputPath(job, outputStage);
 
-       // Submit the job and get completion code.
         int code = job.waitForCompletion(true) ? 0 : 1;
-         /*********************************************************/
         if (code == 0) {
 
-            /****Job #2:Ordering phase ****/
+            /**Job #2 **/
             Job orderJob = Job.getInstance(conf, "Query2Hdfs");
             orderJob.setJarByClass(Query2Hdfs.class);
-
-
-            /*Map:
-            identity function outputs the key / value pairs in the SequenceFile*/
-            orderJob.setMapperClass(Query2Hdfs.SecondMapper.class);
-
-            /*Reduce:
-            identity function (the important data is the key, value is null)*/
-            orderJob.setReducerClass(Query2Hdfs.SecondReducer.class);
+            orderJob.setMapperClass(SecondMapper.class);
+            orderJob.setReducerClass(SecondReducer.class);
             orderJob.setNumReduceTasks(15);
 
             orderJob.setOutputKeyClass(Text.class);
             orderJob.setOutputValueClass(Text.class);
 
-
-            /*Set input and output files:
-            the input is the previous job 's output */
             orderJob.setInputFormatClass(SequenceFileInputFormat.class);
             SequenceFileInputFormat.setInputPaths(orderJob, outputStage);
-
             TextOutputFormat.setOutputPath(orderJob, outputOrder);
-            // Set the separator to an empty string
 
-           /* Submit the job and get completion code.*/
-                    code = orderJob.waitForCompletion(true) ? 0 : 2;
+            long StartQuery2 = System.currentTimeMillis();
+            code = orderJob.waitForCompletion(true) ? 0 : 2;
+            long FinishQuery2= System.currentTimeMillis()-StartQuery2;
+            System.out.println("Tempo esecuzione Query2 2°Map Reduce= "+FinishQuery2+" ms");
+
         }
 
-//        Clean up the partition file and the staging directory
-        FileSystem.get(new Configuration()).delete(partitionFile, false);
+        //FileSystem.get(new Configuration()).delete(partitionFile, false);
         FileSystem.get(new Configuration()).delete(outputStage, true);
         Path[] fragments = new Path[15];
         for (int i = 0; i < 10; i++) {
