@@ -82,16 +82,16 @@ Prima di eseguire il cluster con *Hadoop*, bisogna prima configurarlo attraverso
  
  		 vim ~/.bashrc
  
- Inseriamo i seguenti Path.
+    Inseriamo i seguenti Path.
  
-	  export FLUME_HOME=/usr/local/hadoop/Flume
- 	  export FLUME_CONF_DIR=$FLUME_HOME/conf
- 	  export FLUME_CLASSPATH=$FLUME_CONF_DIR
- 	  export PATH=$PATH:$FLUME_HOME/bin
+	   export FLUME_HOME=/usr/local/hadoop/Flume
+ 	   export FLUME_CONF_DIR=$FLUME_HOME/conf
+ 	   export FLUME_CLASSPATH=$FLUME_CONF_DIR
+ 	   export PATH=$PATH:$FLUME_HOME/bin
 
 6. Infine eseguiamo il comando  
 			
-	    source ~/.bashrc
+	        source ~/.bashrc
 
 7. Modifichiamo i file di configurazione presenti nel file *conf*. Rinominiamo il file **flume-env.sh.template** in **flume-env-sh** e aggiungiamo il path della directory di **Java**.
 #### Installazione Hbase
@@ -100,9 +100,9 @@ Prima di eseguire il cluster con *Hadoop*, bisogna prima configurarlo attraverso
 3. Modificare il file di configurazione *hbase/conf/hbase-env.sh* inserendo il percorso della jdk installata all'interno dell'immagine *Docker*.
 4. Aggiornare il file *.bashrc* aggiungendo:
   
-   	 export HBASE_HOME=/usr/lib/hbase/hbase-0.94.8
-   	 export PATH=$PATH:$HBASE_HOME/bin
-   	 source ~/.bashrc
+   	 	export HBASE_HOME=/usr/lib/hbase
+   	 	export PATH=$PATH:$HBASE_HOME/bin
+   	 	source ~/.bashrc
 
 5. Infine modificare il file /usr/local/hbase/conf/hbase-site.xml
  
@@ -144,8 +144,8 @@ Prima di eseguire il cluster con *Hadoop*, bisogna prima configurarlo attraverso
    
    2.3 Eseguire il comando di esecuzione di *Flume* per effettuare l'import di tali file all'interno di hdfs
    
-  	      /usr/local/hadoop/Flume/bin/flume-ng agent -n agent -c /usr/local/hadoop/Flume/conf -f 		/usr/local/hadoop/Flume/conf/RatingFlume.conf -Dflume.root.looger=DEBUG,console -Xmx2g     
-      	   /usr/local/hadoop/Flume/bin/flume-ng agent -n agent -c /usr/local/hadoop/Flume/conf -f    	      /usr/local/hadoop/Flume/conf/MoviesFlume.conf -Dflume.root.looger=DEBUG,console -Xmx2g 
+  		 /usr/local/hadoop/Flume/bin/flume-ng agent -n agent -c /usr/local/hadoop/Flume/conf -f /usr/local/hadoop/Flume/conf/RatingFlume.conf -Dflume.root.looger=DEBUG,console -Xmx2g     
+         /usr/local/hadoop/Flume/bin/flume-ng agent -n agent -c /usr/local/hadoop/Flume/conf -f  usr/local/hadoop/Flume/conf/MoviesFlume.conf -Dflume.root.looger=DEBUG,console -Xmx2g 
 
 - Infine per eseguire il codice del progetto per ottenere i risultati delle query occore eseguire :
  
@@ -169,6 +169,13 @@ Una volta configurato tutto l'ambiente di sviluppo, come illustrato precedenteme
 		
  	chmod 777 scriptProgetto.sh
 	./scriptProgetto.sh
+
+Questo script esegue tutte e 3 le query richieste salvandole all'interno del database Hbase.
+
+Nel caso si volesse eseguire tutte e 3 le query salavando i risultati all'interno di *Hadoop File System* basterà eseguire il seguente script:
+	
+	chmod 777 scriptProgettoHdfs.sh
+	./scriptProgettoHdfs.sh
 
 
 
