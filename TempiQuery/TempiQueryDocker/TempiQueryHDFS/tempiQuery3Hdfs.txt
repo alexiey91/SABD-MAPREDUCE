@@ -1,5 +1,5 @@
-Tempo di esecuzione Query3 (Hdfs) 1?Map Reduce: 68512 ms
-Tempo di esecuzione Query3 (Hdfs) 2?MapReduce: 30190 ms
-Tempo di esecuzione Query3 (Hdfs) 3?MapReduce: 22577 ms
-Tempo esecuzione Query3 (Hdfs) 4?MapReduce8590 ms
-Tempo esecuzione Query3 (Hdfs) totale 129869 ms -> 2m 9,87 s
+Tempo di esecuzione Query3 (Hdfs) 1?Map Reduce: 66129 ms
+Tempo di esecuzione Query3 (Hdfs) 2?MapReduce: 18835 ms
+Tempo di esecuzione Query3 (Hdfs) 3?MapReduce: 23045 ms
+Tempo esecuzione Query3 (Hdfs) 4?MapReduce: 9010 ms
+Tempo esecuzione Query3 (Hdfs) totale 117019 ms -> 1m 57s
