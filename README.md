@@ -154,7 +154,7 @@ Prima di eseguire il cluster con *Hadoop*, bisogna prima configurarlo attraverso
 -  Nel caso in cui fosse stata scelta la query con il salvataggio dei dati all'interno del database Hbase occererà prima aver avviato il database *Hbase*.
 
 #### Esecuzione Apache Pig
-- Per prima cosa prelevare gli script.pig presenti all'interno del repository, copiarli all'interno della directory */usr/lib/pig/script*.
+- Per prima cosa prelevare gli script.pig presenti all'interno del repository, copiarli all'interno della directory */usr/lib/pig/scripts*.
 - Modificare le prime due righe di codice presenti all'iterno dei tre script stostituendo le directory di *Hadoop* contenenti i file *rating.csv* e *movie.csv*.
 
 	 	rating = LOAD 'hdfs://master:54310/Ratings' USING PigStorage(',') as (userid:int, movieid:int, rating:double, timestamp:int );
@@ -162,7 +162,7 @@ Prima di eseguire il cluster con *Hadoop*, bisogna prima configurarlo attraverso
 
 - Infine eseguire il comando base di *Apache Pig* per eseguire il codice
 
-		$ pig -x mapreduce script/query_scelta.pig > result.query.txt
+		$ pig -x mapreduce scripts/query_scelta.pig > result.query.txt
 
 #### Eseguire il progetto
 Una volta configurato tutto l'ambiente di sviluppo, come illustrato precedentemente, per calcolare tutte e tre le query è possibile sfruttare uno script bash da eseguire all'iterno della directory data/ dell'immagine docker di hadoop:
