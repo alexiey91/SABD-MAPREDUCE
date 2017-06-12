@@ -155,6 +155,11 @@ Prima di eseguire il cluster con *Hadoop*, bisogna prima configurarlo attraverso
 
 #### Esecuzione Apache Pig
 - Per prima cosa prelevare gli script.pig presenti all'interno del repository, copiarli all'interno della directory */usr/lib/pig/scripts*.
+
+- Per poter eseguire correttamente la *query2.pig* occorre scaricare ed estrarre all'iterno di *usr/lib/pig* la libreria  
+			
+		datafu-hourglass-incubating-1.3.1
+
 - Modificare le prime due righe di codice presenti all'iterno dei tre script stostituendo le directory di *Hadoop* contenenti i file *rating.csv* e *movie.csv*.
 
 	 	rating = LOAD 'hdfs://master:54310/Ratings' USING PigStorage(',') as (userid:int, movieid:int, rating:double, timestamp:int );
