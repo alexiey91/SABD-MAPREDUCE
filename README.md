@@ -48,3 +48,83 @@ formato (e.g., *Avro*, *Parquet*, ...), usando un framework a scelta (e.g., *Flu
 
 • esportare i dati di output da *HDFS* ad un sistema di storage a scelta (e.g., *HBase*, ...).
 
+# Installazione Ambiente
+Per prima cosa bisogna aver preinstallato Docker.
+Scaricare l'immagine Docker di Hadoop file system:
+> - $ docker pull matnar/hadoop
+Una volta installata l'immagine bisogna configurare l'ambiente di sviluppo.
+> - E' possibile interagire con il nodo master scambiando i file attraverso il volume all'interno della directory /data.   
+    docker network create --driver bridge hadoop_network
+
+	docker run -t -i -p 50075:50075 -p 50061:50060 -d --network=hadoop_network --name=slave1 matnar/hadoop
+	docker run -t -i -p 50076:50075 -p 50062:50060 -d --network=hadoop_network --name=slave2 matnar/hadoop
+	docker run -t -i -p 50077:50075 -p 50063:50060 -d --network=hadoop_network --name=slave3 matnar/hadoop
+	docker run -t -i -p 50070:50070 -p 50060:50060 -p 50030:50030 -p 8088:8088 -p 19888:19888 --network=hadoop_network --name=master -v $PWD/hddata:/data matnar/hadoop
+Prima di eseguire il cluster con Hadoop, bisogna prima configurarlo attraverso il comando 
+ > - hdfs namenode -format  (N.B da utilizzare soltanto la prima volta)
+	$HADOOP_HOME/sbin/start-dfs.sh
+	$HADOOP_HOME/sbin/start-yarn.sh.
+### Installazione di Apache Flume
+1. Per prima cosa bisogna aver preinstallato una jdk ( la versione jdk 1.8 è consigliata).
+2. Scaricare Apache-flume-1.7.0-bin.tar.gz
+3. Creare una directory all'interno dell'immagine Docker. 
+    mkdir usr/local/hadoop/Flume
+4. Estrarre il file .tar.gz all'interno della nuova directory.
+5. All'interno della directory bisogna aggiornare il file .bashrc.
+ 
+ > vim ~/.bashrc
+ Inseriamo i seguenti Path.
+ >
+ > - export FLUME_HOME=/usr/local/hadoop/Flume
+ > - export FLUME_CONF_DIR=$FLUME_HOME/conf
+ > - export FLUME_CLASSPATH=$FLUME_CONF_DIR
+ > - export PATH=$PATH:$FLUME_HOME/bin
+6. Infine eseguiamo il comando "source ~/.bashrc"
+7. Modifichiamo i file di configurazione presenti nel file conf. Rinominiamo il file flume-env.sh.template in flume-env-sh e aggiungiamo il path della directory di Java.
+### Installazione Hbase
+1. Dowload hbase-1.2.5.bin.tar.gz dal sito ufficiale.
+2. Estrarre tale file all'interno dell'immagine Docker di Hadoop nel percorso /usr/local/hbase (una volta creata la cartella hbase)
+3. Modificare il file di configurazione hbase/onf/hbase-env.sh inserendo il percorso della jdk installata all'interno dell'immagine DOcker.
+4. Aggiornare il file .bashrc aggiungendo:
+  > - export HBASE_HOME=/usr/lib/hbase/hbase-0.94.8
+  > - export PATH=$PATH:$HBASE_HOME/bin
+  > - source ~/.bashrc
+5. Infine modificare il file /usr/local/hbase/conf/hbase-site.xml
+ 
+  ```xml
+  <?xml version="1.0"?>
+
+  <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+  <configuration>
+  <property>
+
+    <name>hbase.rootdir</name>
+
+    <value>file:///home/hduser/HBASE/hbase</value>
+
+  </property>
+
+  <property>
+
+      <name>hbase.zookeeper.property.dataDir</name>
+
+      <value>/home/hduser/HBASE/zookeeper</value>
+
+    </property>
+
+    </configuration>
+    ```
+        
+#### Installare Apache Pig
+1. Scaricare dal sito ufficiale la versione pig-0.16.0.tar.gz
+2. Creare la directory ed estrarre al suo interno Apache Pig /usr/lib/pig
+3. Aggiorniamo il file ~/.bashrc inserendo:
+  > - export PIG_HOME=/usr/lib/pig
+  > - export PATH=$PATH:$PIG_HOME/bin
+  > - source /.bashrc
+
+#### Esecuzione del Progetto
+> Copiare il file mapreducedesignpattern.jar all'iterno della directory /hddata
+> - Per eseguire una qualsiasi query occorre per prima cosa caricare i file .csv forniti da MovieLens.
+> - Se si utilizza il servizio fornito da hadoop ovvero hdfs dfs -put nomefile hdfs:///directory_di_destinazione basterà richiamare il seguente comando :
+    $hadoop jar mapreducedesignpattern.jar query.tipo_query hdfs:///directory_file_rating.csv hdfs:/// directory_file_movie.csv hdfs:///directory_output;
