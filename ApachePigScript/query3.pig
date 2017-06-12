@@ -1,8 +1,8 @@
-rating =LOAD 'hdfs://master:54310/ratingT.csv' USING PigStorage(',') as
+rating =LOAD 'hdfs://master:54310/ratingT.csv' USING org.apache.pig.piggybank.storage.CSVLoader()   as 
                 (userid:int, movieid:int, rating:double, timestamp:int);
 
 
-movies = LOAD 'hdfs://master:54310/movieT.csv' USING PigStorage(',') as
+movies = LOAD 'hdfs://master:54310/movieT.csv' USING org.apache.pig.piggybank.storage.CSVLoader()  as
                 (movieid:int , title:chararray, genres: chararray);
 
 

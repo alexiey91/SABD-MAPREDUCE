@@ -2,11 +2,11 @@ REGISTER  /usr/lib/pig/datafu-pig-incubating-1.3.1.jar;
 
 define VAR datafu.pig.stats.VAR();
 
-rating = LOAD 'hdfs://master:54310/ratingT.csv' USING PigStorage(',') as
+rating = LOAD 'hdfs://master:54310/ratingT.csv' USING org.apache.pig.piggybank.storage.CSVLoader()  as
                 (userid:int, movieid:int, rating:double, timestamp:int);
 
 
-movies = LOAD 'hdfs://master:54310/movieT.csv' USING PigStorage(',') as
+movies = LOAD 'hdfs://master:54310/movieT.csv' USING org.apache.pig.piggybank.storage.CSVLoader()  as
                 (movieid:int , title:chararray, genres: chararray);
 
 
@@ -50,7 +50,7 @@ scifi = FILTER avg_genres BY (newGenres matches 'Sci-Fi');
 thriller = FILTER avg_genres BY (newGenres matches 'Thriller');
 war = FILTER avg_genres BY (newGenres matches 'War');
 western = FILTER avg_genres BY (newGenres matches 'Western');
-no_genres = FILTER avg_genres BY (newGenres matches '(no genres listed)');
+no_genres = FILTER avg_genres BY (newGenres matches '\\(no genres listed\\)');
 
 final = UNION action, adventure, animation, children, comedy, crime, documentary, drama, fantasy, filmnoir, horror,imax, musical, mystery, romance, scifi, thriller, war, western ,no_genres;
 
