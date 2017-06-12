@@ -162,8 +162,8 @@ Prima di eseguire il cluster con *Hadoop*, bisogna prima configurarlo attraverso
 
 - Modificare le prime due righe di codice presenti all'iterno dei tre script stostituendo le directory di *Hadoop* contenenti i file *rating.csv* e *movie.csv*.
 
-	 	rating = LOAD 'hdfs://master:54310/Ratings' USING PigStorage(',') as (userid:int, movieid:int, rating:double, timestamp:int );
-        movies = LOAD 'hdfs://master:54310/Movies' USING PigStorage(',') as (movieid:int , title:chararray, genres: chararray);
+	 	rating = LOAD 'hdfs://master:54310/Ratings' USING org.apache.pig.piggybank.storage.CSVLoader() as (userid:int, movieid:int, rating:double, timestamp:int );
+        movies = LOAD 'hdfs://master:54310/Movies' USING org.apache.pig.piggybank.storage.CSVLoader() as (movieid:int , title:chararray, genres: chararray);
 
 - Infine eseguire il comando base di *Apache Pig* per eseguire il codice
 
