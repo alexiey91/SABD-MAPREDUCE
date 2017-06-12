@@ -74,7 +74,7 @@ Prima di eseguire il cluster con Hadoop, bisogna prima configurarlo attraverso i
  
  > vim ~/.bashrc
  Inseriamo i seguenti Path.
- >
+ 
  > - export FLUME_HOME=/usr/local/hadoop/Flume
  > - export FLUME_CONF_DIR=$FLUME_HOME/conf
  > - export FLUME_CLASSPATH=$FLUME_CONF_DIR
@@ -91,30 +91,18 @@ Prima di eseguire il cluster con Hadoop, bisogna prima configurarlo attraverso i
   > - source ~/.bashrc
 5. Infine modificare il file /usr/local/hbase/conf/hbase-site.xml
  
-  ```xml
-  <?xml version="1.0"?>
+ <pre><code>&lt;?xml version="1.0"?&gt;&lt;?xml-stylesheet type="text/xsl"ref="configuration.xsl&gt;
+  &lt;configuration&gt;&lt;property&gt;
+    &lt;name&gt;hbase.rootdir&lt;/name&gt;
+    &lt;value&gt;file:///home/hduser/HBASE/hbase&lt;/value&gt;
+  &lt;/property&gt;
+  &lt;property&gt;
+      &lt;name&gt;hbase.zookeeper.property.dataDir&lt;/name&gt;
+      &lt;value&gt;/home/hduser/HBASE/zookeeper&lt;/value&gt;
+    &lt;/property&gt;
+    &lt;/configuration&gt;</code></pre>
+    
 
-  <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
-  <configuration>
-  <property>
-
-    <name>hbase.rootdir</name>
-
-    <value>file:///home/hduser/HBASE/hbase</value>
-
-  </property>
-
-  <property>
-
-      <name>hbase.zookeeper.property.dataDir</name>
-
-      <value>/home/hduser/HBASE/zookeeper</value>
-
-    </property>
-
-    </configuration>
-    ```
-        
 #### Installare Apache Pig
 1. Scaricare dal sito ufficiale la versione pig-0.16.0.tar.gz
 2. Creare la directory ed estrarre al suo interno Apache Pig /usr/lib/pig
@@ -124,7 +112,25 @@ Prima di eseguire il cluster con Hadoop, bisogna prima configurarlo attraverso i
   > - source /.bashrc
 
 #### Esecuzione del Progetto
-> Copiare il file mapreducedesignpattern.jar all'iterno della directory /hddata
-> - Per eseguire una qualsiasi query occorre per prima cosa caricare i file .csv forniti da MovieLens.
-> - Se si utilizza il servizio fornito da hadoop ovvero hdfs dfs -put nomefile hdfs:///directory_di_destinazione basterà richiamare il seguente comando :
-    $hadoop jar mapreducedesignpattern.jar query.tipo_query hdfs:///directory_file_rating.csv hdfs:/// directory_file_movie.csv hdfs:///directory_output;
+ Copiare il file mapreducedesignpattern.jar all'iterno della directory /hddata.
+ Per eseguire una qualsiasi query occorre per prima cosa caricare i file .csv forniti da MovieLens.
+
+1. Utilizzando le Api fornite da hadoop si esegue il seguente comando:
+    
+    	>    hdfs dfs -put nomefile hdfs:///directory_di_destinazione 
+
+2. Se invece si volesse caricare i dati all'iterno di Hadoop sfruttando il servizio di Flume occorrerà:
+ 
+   2.1 Create due directory SpoolDir e SpoolMovie dove inserire rispettivamente i file rating.csv e movie.csv.
+   
+   2.2 Prelevare i file di configurazione di Flume presenti nel repository (RatingFlume.conf e Movies.conf) e caricarli 		all'iterno della directory usr/local/hadoo/Flume/conf
+   
+   2.3 Eseguire il comando di esevuzione di Flume per effettuare l'import di tali file
+   
+  	 > -    /usr/local/hadoop/Flume/bin/flume-ng agent -n agent -c /usr/local/hadoop/Flume/conf -f 		/usr/local/hadoop/Flume/conf/RatingFlume.conf -Dflume.root.looger=DEBUG,console -Xmx2g     
+      	> - /usr/local/hadoop/Flume/bin/flume-ng agent -n agent -c /usr/local/hadoop/Flume/conf -f    	      /usr/local/hadoop/Flume/conf/MoviesFlume.conf -Dflume.root.looger=DEBUG,console -Xmx2g 
+
+- basterà richiamare il seguente comando :
+ 
+ >    $hadoop jar mapreducedesignpattern.jar query.tipo_query hdfs:///directory_file_rating.csv hdfs:/// directory_file_movie.csv hdfs:///directory_output > file_tempi_query.txt;
+-  Nel caso in cui fosse stata scelta la query con il salvataggio dei dati all'interno del database Hbase occererà prima aver avviato il database Hbase.
