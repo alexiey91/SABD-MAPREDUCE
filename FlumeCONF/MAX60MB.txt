@@ -39,7 +39,7 @@ spoolDir.sinks.sink_to_hdfs1.channel = channel-1
 
 spoolDir.sinks.sink_to_hdfs1.hdfs.fileType = DataStream
 
-spoolDir.sinks.sink_to_hdfs1.hdfs.path = hdfs://master:54310/PorcoDio
+spoolDir.sinks.sink_to_hdfs1.hdfs.path = hdfs://master:54310/Testing
 
 spoolDir.sinks.sink_to_hdfs1.hdfs.filePrefix = %{basename}-
 
