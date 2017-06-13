@@ -14,7 +14,7 @@ agent.sources.file-source.fileHeader = true
 
 # Configure the sink
 agent.sinks.hdfs-sink.type = hdfs
-agent.sinks.hdfs-sink.hdfs.path = hdfs://master:54310/Stefano
+agent.sinks.hdfs-sink.hdfs.path = hdfs://master:54310/Testing
 agent.sinks.hdfs-sink.hdfs.fileType = DataStream
 agent.sinks.hdfs-sink.hdfs.filePrefix = %{file}
 agent.sinks.hdfs-sink.hdfs.fileSuffix = .csv
